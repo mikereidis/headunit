@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/ll_main"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical">
+
+  <LinearLayout
+    android:id="@+id/ll_tv_ext"
+    android:visibility="gone"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:orientation="vertical">
+    <TextView android:id="@+id/tv_ext"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:id="@+id/ll_tv_log"
+    android:visibility="visible"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="15"
+    android:orientation="vertical">
+    <TextView android:id="@+id/tv_log"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent" />
+  </LinearLayout>
+
+  <FrameLayout
+    android:id="@+id/fl_sv_vid"
+    android:visibility="visible"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="5">
+    <SurfaceView android:id="@+id/sv_vid"
+      android:layout_width="match_parent"
+      android:layout_height="match_parent"
+    />
+  </FrameLayout>
+
+</LinearLayout>
+<!-- 
+-->
+

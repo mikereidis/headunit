@@ -1,0 +1,25 @@
+#!/bin/bash
+export MY_KEYSTORE_FILE="/home/mike/dev/key/headunit_key"
+export MY_KEYSTORE_PASS="password"
+export MY_KEY_NAME="mikereidis_key"
+export WS="/home/mike/dev"
+export PROJ="hu"
+cd $WS/$PROJ
+
+rm -rf obj  # obj/local/armeabi/*
+rm -rf libs # libs/armeabi/
+
+mkdir libs
+
+android update project --target android-21 --path . --name $PROJ
+
+echo ndk-build start
+time ndk-build # 2>&1 |grep -i error
+
+ant -q clean release
+
+jarsigner -storepass $MY_KEYSTORE_PASS -sigalg MD5withRSA -digestalg SHA1 -keystore $MY_KEYSTORE_FILE -signedjar bin/$PROJ-release-unaligned.apk bin/$PROJ-release-unsigned.apk $MY_KEY_NAME
+zipalign -f 4 bin/$PROJ-release-unaligned.apk bin/$PROJ-release.apk
+
+#adb install -r bin/$PROJ-release.apk
+
