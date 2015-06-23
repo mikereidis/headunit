@@ -14,4 +14,3 @@ MUCH more info and ask any question on my XDA thread: http://forum.xda-developer
 Latest June 16 Release #5 APK here: http://forum.xda-developers.com/showpost.php?p=61422602&postcount=163
 
 Android, Google Play, Google Maps, Google Play Music and Android Auto are trademarks of Google Inc.
-
