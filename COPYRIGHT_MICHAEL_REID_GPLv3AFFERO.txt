@@ -10,7 +10,9 @@ Headunit for Android Auto (tm) is a software based headunit compatible with Andr
 
 Headunit for Android Auto is Copyright 2011-2015 Michael A. Reid (mikereidis@gmail.com). All rights are reserved.
 
-Please contact mikereidis@gmail.com to license for commercial use.
+Headunit is licensed under GPLv3 Affero, but I am considering re-licensing under BSD or Apache.
+
+Please contact mikereidis@gmail.com for further license info.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
