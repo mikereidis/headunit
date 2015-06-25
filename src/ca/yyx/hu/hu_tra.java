@@ -135,6 +135,7 @@ public class hu_tra {
   }
 
   public int jni_start () {
+
     byte [] cmd_buf = {121, -127, 2};                                   // Start Request w/ m_ep_in_addr, m_ep_out_addr
     cmd_buf [1] = (byte) m_ep_in_addr;
     cmd_buf [2] = (byte) m_ep_out_addr;
@@ -336,7 +337,7 @@ public class hu_tra {
           String dev_man  = "";
           String dev_prod = "";
           String dev_ser  = "";
-          if (hu_uti.android_version >= 21) {                          // Android 5.0+ only
+          if (hu_uti.android_version >= 21) {                           // Android 5.0+ only
             dev_man  = device.getManufacturerName ();                   // mManufacturerName=HTC
             dev_prod = device.getProductName      ();                   // mProductName=Android Phone
             dev_ser  = device.getSerialNumber     ();                   // mSerialNumber=FA46RWM22264
@@ -428,6 +429,12 @@ public class hu_tra {
       if (m_hu_act.ls_debug) m_hu_act.ld ("Connected so start JNI");
       //hu_uti.ms_sleep (2000);                                         // Wait to settle
       //if (m_hu_act.ls_debug) m_hu_act.ld ("connected done sleep");
+
+      if (hu_act.m_disable_alleged_google_dda_4_4_violation) {
+        if (m_hu_act.ls_debug) m_hu_act.ld ("Success so far, terminating startup due to m_disable_alleged_google_dda_4_4_violation");
+        return;// (-1);                                                      // Kill it so Google has no basis to claim DDA section 4.4 violation. Android Auto won't work and this app reduced to USB test
+      }
+
 
       m_hu_act.ui_video_started_set (true);
       int ret = jni_start ();

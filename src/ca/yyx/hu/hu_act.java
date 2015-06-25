@@ -57,7 +57,11 @@ import android.media.CamcorderProfile;
 
 public class hu_act extends Activity implements SurfaceHolder.Callback {
 
-  private hu_tra       m_hu_tra;        // Transport API
+  //public static final boolean m_disable_alleged_google_dda_4_4_violation = true;  // Google Play version: disable Android Auto (tm) functionality
+  public static final boolean m_disable_alleged_google_dda_4_4_violation = false;   // Open Source version: enable  Android Auto (tm) functionality
+
+
+  private hu_tra        m_hu_tra;        // Transport API
 
   private TextView      m_tv_log;
   private LinearLayout  m_ll_tv_log;
@@ -246,7 +250,17 @@ String intro2_str = "";
       intro2_str = "This device/ROM must support USB Host Mode AND IT DOES NOT APPEAR TO BE SUPPORTED !!!!!!!!!!\n";
     screen_logd (intro2_str);
 
-String intro3_str = "" +
+String intro3_str = "";
+
+if (m_disable_alleged_google_dda_4_4_violation)
+intro3_str += "" +
+"!!!!!!!! NOTE !!!!!!!!\n" +
+"This version has Android Auto functionality disabled. It is only useful for USB tests.\n" +
+"Google removed Headunit from Play alleging violation of DDA section 4.4.\n" +
+"I appealed and have NO reply in 12 days, despite a 3 day response claim.\n" +
+"Please email mikereidis@gmail.com, see XDA or ask Google for refunds or more info.\n";
+
+intro3_str += "" +
 "See XDA thread for latest info and ask any question\n" +
 "\n" +
 "Connect this device to USB OTG cable\n" +
@@ -311,9 +325,9 @@ String intro3_str = "" +
         if (click_ctr == log_clicks - 1) {
           click_ctr ++;
 
-          //logs_email ();
+          logs_email ();
 
-          video_sample_start (false);
+          //video_sample_start (false);
 
           //click_ctr = 0;    // Zero'd when logs processed
         }
@@ -379,8 +393,8 @@ ui_video_started_set (true);
 
   String h264_full_filename = null;
   private void video_sample (final boolean started) {
-    if (h264_full_filename == null)
-      h264_full_filename = hu_uti.res_file_create (m_context, R.raw.husam_h264, "husam.h264");
+//!!    if (h264_full_filename == null)
+//!!      h264_full_filename = hu_uti.res_file_create (m_context, R.raw.husam_h264, "husam.h264");
     if (h264_full_filename == null)
       h264_full_filename = "/data/data/ca.yyx.hu/files/husam.h264";
 

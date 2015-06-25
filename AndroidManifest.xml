@@ -2,8 +2,8 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="ca.yyx.hu"
-  android:versionCode="6"
-  android:versionName="2015_06_20" >
+  android:versionCode="8"
+  android:versionName="2015_06_25_os" >
 
   <uses-feature android:name="android.hardware.usb.host"          android:required="false"/>
   <uses-feature android:name="android.hardware.screen.landscape"  android:required="false"/>
