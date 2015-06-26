@@ -1,10 +1,11 @@
 
   // AA Dump API:
 
-#ifndef NDEBUG
 
   #define LOGTAG "hu_aad"
   #include "hu_uti.h"
+
+#ifndef NDEBUG
 
   // AA Dump Internal:
 

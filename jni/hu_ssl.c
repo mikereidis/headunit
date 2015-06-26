@@ -64,10 +64,10 @@
     BIO               * cert_bio = NULL;
     BIO               * pkey_bio = NULL;
 
- SSL_load_error_strings ();
-  ERR_load_BIO_strings ();
-  ERR_load_crypto_strings ();
-  ERR_load_SSL_strings ();
+    SSL_load_error_strings ();                                          // Before or after init ?
+    ERR_load_BIO_strings ();
+    ERR_load_crypto_strings ();
+    ERR_load_SSL_strings ();
 
     ret = SSL_library_init ();                                          // Init
     logd ("SSL_library_init ret: %d", ret);
@@ -76,10 +76,10 @@
       return (-1);
     }
 
- SSL_load_error_strings ();
-  ERR_load_BIO_strings ();
-  ERR_load_crypto_strings ();
-  ERR_load_SSL_strings ();
+    SSL_load_error_strings ();                                          // Before or after init ?
+    ERR_load_BIO_strings ();
+    ERR_load_crypto_strings ();
+    ERR_load_SSL_strings ();
 
     OPENSSL_add_all_algorithms_noconf ();                               // Add all algorithms, without using config file
 

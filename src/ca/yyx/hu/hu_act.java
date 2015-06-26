@@ -141,14 +141,14 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
 
   @Override
   protected void onCreate (Bundle savedInstanceState) {
-    if (BuildConfig.DEBUG) hu_uti.logd ("savedInstanceState: " + savedInstanceState);
+    hu_uti.logd ("savedInstanceState: " + savedInstanceState);
     super.onCreate (savedInstanceState);
 
     Log.d ("hu", "Headunit for Android Auto (tm) - Copyright 2011-2015 Michael A. Reid. All Rights Reserved...");
 
     m_scr_hei = getWindowManager ().getDefaultDisplay ().getHeight ();
     m_scr_wid  = getWindowManager ().getDefaultDisplay ().getWidth ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("m_scr_wid: "  + m_scr_wid + "  m_scr_hei: " + m_scr_hei);
+    hu_uti.logd ("m_scr_wid: "  + m_scr_wid + "  m_scr_hei: " + m_scr_hei);
 
     android.graphics.Point size = new android.graphics.Point ();
     getWindowManager ().getDefaultDisplay ().getSize (size);
@@ -160,7 +160,7 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
     else
       m_scr_land = false;
 
-    if (BuildConfig.DEBUG) hu_uti.logd ("m_scr_wid: "  + m_scr_wid  + "  m_scr_hei: " + m_scr_hei  + "  m_scr_land: " + m_scr_land);
+    hu_uti.logd ("m_scr_wid: "  + m_scr_wid  + "  m_scr_hei: " + m_scr_hei  + "  m_scr_land: " + m_scr_land);
 
 //N9 portrait:
 //06-08 00:44:24.390 D/                onCreate( 6082): m_scr_wid: 1536.0  m_scr_hei: 1952.0
@@ -173,7 +173,7 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
 
     getWindow ().addFlags (android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);   // !! Keep Screen on !!
 
-
+/*
     // Set the IMMERSIVE flag. Set the content to appear under the system bars so that the content doesn't resize when the system bars hide and show.
     m_ll_main = findViewById (R.id.ll_main);
     if (m_ll_main != null)
@@ -184,7 +184,7 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav bar
             | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
             | View.SYSTEM_UI_FLAG_IMMERSIVE);
-
+*/
 
     m_tv_log = (TextView) findViewById (R.id.tv_log);
     m_tv_log.setMovementMethod (android.text.method.ScrollingMovementMethod.getInstance ());
@@ -203,11 +203,14 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
 
     m_tv_ext = (TextView) findViewById (R.id.tv_ext);
     //m_tv_ext.setText ("Extra...........................................................\n..............................................\n.................................\r...");
-//*
+
     //m_ll_tv_ext.setVisibility (View.GONE);
-    if (m_scr_land && m_scr_wid / m_scr_hei < 1.5)       // 16:9 = 1.777     //  4:3 = 1.333
-      m_ll_tv_ext.setVisibility (View.VISIBLE);
+
+///*
+    if (m_scr_land && m_scr_wid / m_scr_hei < 1.5)                      // If closer to 16:9 aspect ratio than 4:3...       // 16:9 = 1.777     //  4:3 = 1.333
+      m_ll_tv_ext.setVisibility (View.VISIBLE);                         // Enable black bar at top
 //*/
+
 /*
     m_tv_fps = (TextView) findViewById (R.id.tv_fps);
     if (m_tv_fps != null)
@@ -232,7 +235,7 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
         m_wakelock.acquire ();                                          // Android M exception for WAKE_LOCK
     }
     catch (Throwable t) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 
 
@@ -278,7 +281,8 @@ intro3_str += "" +
 
 
 
-    if (hu_uti.file_get ("/sdcard/husuj"))
+    //if (hu_uti.file_get ("/sdcard/husuj"))
+    if (! hu_uti.file_get ("/sdcard/husujd"))
       //hu_uti.sys_run ("setenforce 0 1>/dev/null 2>/dev/null ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null", true);
       hu_uti.sys_run ("chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null", true);
 
@@ -301,10 +305,10 @@ intro3_str += "" +
 
       int log_clicks = 7;
 
-      if (BuildConfig.DEBUG) hu_uti.logd ("view: " + v);
+      hu_uti.logd ("view: " + v);
       //ani (v);                                                          // Animate button
       if (v == null) {
-        if (BuildConfig.DEBUG) hu_uti.loge ("view: " + v);
+        hu_uti.loge ("view: " + v);
       }
 
       else if (v == m_tv_log) {
@@ -325,9 +329,16 @@ intro3_str += "" +
         if (click_ctr == log_clicks - 1) {
           click_ctr ++;
 
-          logs_email ();
-
+          //logs_email ();
           //video_sample_start (false);
+
+          if (m_hu_tra != null) {
+            ui_video_started_set (true);                             // Enable video/disable log view
+            int ret = m_hu_tra.jni_start ();
+            screen_logd ("jni_start() ret: " + ret);
+          }
+          else
+            logs_email ();  // Shouldn't happen
 
           //click_ctr = 0;    // Zero'd when logs processed
         }
@@ -340,9 +351,9 @@ intro3_str += "" +
 
 
 
-  private void video_sample_start (final boolean started) {
 /*
-    class vs_task implements Runnable {
+  private void old_video_sample_start (final boolean started) {
+    class vs_task implements Runnable {                                 // !!!! Doesn't work !!!!
       boolean started;
       vs_task (boolean s) { started = s; }
         public void run() {
@@ -350,9 +361,13 @@ intro3_str += "" +
         }
     }
     runOnUiThread (new vs_task (started));
+  }
 */
 
-ui_video_started_set (true);
+/*
+  private void video_sample_start (final boolean started) {
+
+    ui_video_started_set (true);                                        // Enable video/disable log view
 
     Thread thread_vs = new Thread (run_vs, "run_vs");
     //com_uti.logd ("thread_vs: " + thread_vs);
@@ -368,7 +383,6 @@ ui_video_started_set (true);
       //else
       //  com_uti.loge ("thread_vs thread_state: " + thread_state);
     }
-
   }
 
   private final Runnable run_vs = new Runnable () {
@@ -444,14 +458,15 @@ ui_video_started_set (true);
     }
 
   }
+*/
 
   private boolean video_started = false;
   public void ui_video_started_set (boolean started) {                  // Called directly from hu_tra because runOnUiThread() won't work
-    if (video_started == started)
+    if (video_started == started)                                       // If no change...
       return;
     try {
       if (started) {
-        m_ll_tv_log.setVisibility (View.GONE);
+        m_ll_tv_log.setVisibility (View.GONE);                          // Remove log from screen
         //m_fl_sv_vid.setVisibility (View.VISIBLE);
 /*
         //m_ll_tv_ext.setVisibility (View.GONE);
@@ -491,7 +506,7 @@ ui_video_started_set (true);
 
   @Override
   protected void onDestroy () {
-    if (BuildConfig.DEBUG) hu_uti.logd ("");
+    hu_uti.logd ("");
 
     super.onDestroy ();
 
@@ -506,7 +521,7 @@ ui_video_started_set (true);
         m_wakelock.release ();
     }
     catch (Throwable t) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 
     android.os.Process.killProcess (android.os.Process.myPid ());
@@ -520,27 +535,27 @@ ui_video_started_set (true);
   private double vid_wid_get () {
     double vid_wid  = 0;
     vid_wid = m_sv_vid.getWidth ();
-    /*if (BuildConfig.DEBUG) hu_uti.logd ("vid_wid: "  + vid_wid);
+    /*hu_uti.logd ("vid_wid: "  + vid_wid);
     vid_wid = m_sv_vid.getMeasuredWidth ();                             // Same value
-    if (BuildConfig.DEBUG) hu_uti.logd ("vid_wid: "  + vid_wid);*/
+    hu_uti.logd ("vid_wid: "  + vid_wid);*/
     return (vid_wid);
   }
   private double vid_hei_get () {
     double vid_hei  = 0;
     vid_hei = m_sv_vid.getHeight ();
-    /*if (BuildConfig.DEBUG) hu_uti.logd ("vid_hei: "  + vid_hei);
+    /*hu_uti.logd ("vid_hei: "  + vid_hei);
     vid_hei = m_sv_vid.getMeasuredHeight ();                            // Same value
-    if (BuildConfig.DEBUG) hu_uti.logd ("vid_hei: "  + vid_hei);*/
+    hu_uti.logd ("vid_hei: "  + vid_hei);*/
     return (vid_hei);
   }
 /*
     m_vid_wid = m_sv_vid.getWidth ();
     m_vid_hei = m_sv_vid.getHeight ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("m_vid_wid: "  + m_vid_wid + "  m_vid_hei: " + m_vid_hei);
+    hu_uti.logd ("m_vid_wid: "  + m_vid_wid + "  m_vid_hei: " + m_vid_hei);
 
     m_vid_wid = m_sv_vid.getMeasuredWidth ();
     m_vid_hei = m_sv_vid.getMeasuredHeight ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("m_vid_wid: "  + m_vid_wid + "  m_vid_hei: " + m_vid_hei);
+    hu_uti.logd ("m_vid_wid: "  + m_vid_wid + "  m_vid_hei: " + m_vid_hei);
 
 //06-08 00:44:24.390 D/                onCreate( 6082): m_scr_wid: 1536.0  m_scr_hei: 1952.0
     double max_vid_wid = 1536;      //512;    
@@ -553,13 +568,13 @@ ui_video_started_set (true);
 
 
   private void touch_send (MotionEvent event) {
-    //if (BuildConfig.DEBUG) hu_uti.logd ("event: " + event);
+    //hu_uti.logd ("event: " + event);
 
     int x = (int) (event.getX (0) / (vid_wid_get () / m_virt_vid_wid));
     int y = (int) (event.getY (0) / (vid_hei_get () / m_virt_vid_hei));
 
     if (x < 0 || y < 0 || x >= 65535 || y >= 65535) {   // Infinity if vid_wid_get() or vid_hei_get() return 0
-      if (BuildConfig.DEBUG) hu_uti.loge ("Invalid x: " + x + "  y: " + y);
+      hu_uti.loge ("Invalid x: " + x + "  y: " + y);
       return;
     }
 
@@ -567,23 +582,23 @@ ui_video_started_set (true);
     int me_action = event.getActionMasked ();
     switch (me_action) {
       case MotionEvent.ACTION_DOWN:
-        if (BuildConfig.DEBUG) hu_uti.logd ("event: " + event + " (ACTION_DOWN)    x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_DOWN)    x: " + x + "  y: " + y);
         aa_action = 0;
         break;
       case MotionEvent.ACTION_MOVE:
-        if (BuildConfig.DEBUG) hu_uti.logd ("event: " + event + " (ACTION_MOVE)    x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_MOVE)    x: " + x + "  y: " + y);
         aa_action = 2;
         break;
       case MotionEvent.ACTION_CANCEL:
-        if (BuildConfig.DEBUG) hu_uti.loge ("event: " + event + " (ACTION_CANCEL)  x: " + x + "  y: " + y);
+        hu_uti.loge ("event: " + event + " (ACTION_CANCEL)  x: " + x + "  y: " + y);
         aa_action = 1;
         break;
       case MotionEvent.ACTION_UP:
-        if (BuildConfig.DEBUG) hu_uti.logd ("event: " + event + " (ACTION_UP)      x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_UP)      x: " + x + "  y: " + y);
         aa_action = 1;
         break;
       default:
-        if (BuildConfig.DEBUG) hu_uti.loge ("event: " + event + " (Unknown: " + me_action + ")  x: " + x + "  y: " + y);
+        hu_uti.loge ("event: " + event + " (Unknown: " + me_action + ")  x: " + x + "  y: " + y);
         return;
     }
     if (m_hu_tra != null)
@@ -592,7 +607,7 @@ ui_video_started_set (true);
 
   @Override
   public void onAttachedToWindow () {
-    if (BuildConfig.DEBUG) hu_uti.logd ("");
+    hu_uti.logd ("");
     super.onAttachedToWindow ();
     m_surface_attached = true;
     sv_vid_set (m_sv_vid);
@@ -600,7 +615,7 @@ ui_video_started_set (true);
 
   @Override
   public void onDetachedFromWindow () {
-    if (BuildConfig.DEBUG) hu_uti.logd ("");
+    hu_uti.logd ("");
     super.onDetachedFromWindow ();
     m_surface_attached = false;
     sv_vid_set (null);
@@ -608,7 +623,7 @@ ui_video_started_set (true);
 
 
   private void sv_vid_set (final SurfaceView sv_vid) {
-    if (BuildConfig.DEBUG) hu_uti.logd ("sv_vid: " + sv_vid);
+    hu_uti.logd ("sv_vid: " + sv_vid);
     if (m_sv_vid2 == sv_vid)                                // If NOT a new surface view...
       return;
 
@@ -643,18 +658,18 @@ ui_video_started_set (true);
 
   @Override
   public void surfaceCreated (SurfaceHolder holder) {                   // Ignore.  Wait for surface changed event that follows.
-    if (BuildConfig.DEBUG) hu_uti.logd ("holder: " + holder);
+    hu_uti.logd ("holder: " + holder);
   }
 
   @Override
   public void surfaceChanged (SurfaceHolder holder, int format, int width, int height) {
-    if (BuildConfig.DEBUG) hu_uti.logd ("holder: " + holder + "  format: " + format + "  width: " + width + "  height: " + height);
+    hu_uti.logd ("holder: " + holder + "  format: " + format + "  width: " + width + "  height: " + height);
     surface_update (holder);
   }
 
   @Override
   public void surfaceDestroyed (SurfaceHolder holder) {
-    if (BuildConfig.DEBUG) hu_uti.logd ("holder: " + holder);
+    hu_uti.logd ("holder: " + holder);
 
 // !! disable ??
 surface_update (null);
@@ -662,14 +677,14 @@ surface_update (null);
   }
 
   private void surface_update (SurfaceHolder holder) {
-    if (BuildConfig.DEBUG) hu_uti.logd ("holder: " + holder);
+    hu_uti.logd ("holder: " + holder);
 
     Surface surface = null;
     int width = 0, height = 0;
 
     if (holder != null && ! holder.isCreating ()) {
       surface = holder.getSurface ();
-      if (BuildConfig.DEBUG) hu_uti.logd ("surface: " + surface);
+      hu_uti.logd ("surface: " + surface);
 
       if (surface.isValid ()) {
         final Rect frame = holder.getSurfaceFrame ();
@@ -681,15 +696,15 @@ surface_update (null);
       }
     }
 
-    if (BuildConfig.DEBUG) hu_uti.logd ("surface: " + surface + "  width: " + width + "  height: " + height);
+    hu_uti.logd ("surface: " + surface + "  width: " + width + "  height: " + height);
 
     synchronized (m_surf_codec_lock) {
       if (m_surface == surface &&  m_sur_wid == width && m_sur_hei == height) {  // If no surface, width or height change...
-        if (BuildConfig.DEBUG) hu_uti.logd ("No change for surface, width or height; done");
+        hu_uti.logd ("No change for surface, width or height; done");
         return;
       }
 
-      if (BuildConfig.DEBUG) hu_uti.logd ("Change for surface, width or height");
+      hu_uti.logd ("Change for surface, width or height");
 
       m_surface = surface;
       m_sur_wid = width;
@@ -707,7 +722,7 @@ surface_update (null);
       }
 */
 
-      if (BuildConfig.DEBUG) hu_uti.logd ("m_sur_wid: " + m_sur_wid + "  m_sur_hei: " + m_sur_hei);
+      hu_uti.logd ("m_sur_wid: " + m_sur_wid + "  m_sur_hei: " + m_sur_hei);
 
 
 /* GS3 doesn't work:
@@ -721,7 +736,7 @@ surface_update (null);
       int cam_prof = camcorder_profile_get ();
 
       if (m_codec != null) {
-        if (BuildConfig.DEBUG) hu_uti.logd ("Cleanup previous codec");
+        hu_uti.logd ("Cleanup previous codec");
         m_codec.stop ();
         m_codec = null;
         m_codec_input_bufs = null;
@@ -755,33 +770,33 @@ surface_update (null);
     if (CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_1080P)) {
       if (prof < 1080)
         prof = 1080;
-      if (BuildConfig.DEBUG) hu_uti.logd ("1080p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_1080P);
+      hu_uti.logd ("1080p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_1080P);
     }
     if (CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_720P)) {
       if (prof < 720)
         prof = 720;
-      if (BuildConfig.DEBUG) hu_uti.logd (" 720p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_720P);
+      hu_uti.logd (" 720p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_720P);
     }
     if (CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_480P)) {
       if (prof < 480)
         prof = 480;
-      if (BuildConfig.DEBUG) hu_uti.logd (" 480p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_480P);
+      hu_uti.logd (" 480p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_480P);
     }
     if (CamcorderProfile.hasProfile(CamcorderProfile.QUALITY_HIGH)) {
       if (prof < 240)
         prof = 240; // !!!!!!!! ??
-      if (BuildConfig.DEBUG) hu_uti.logd ("HIGH");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+      hu_uti.logd ("HIGH");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
     }
-    //if (BuildConfig.DEBUG) hu_uti.loge ("Unknown");//
+    //hu_uti.loge ("Unknown");//
 
-    //if (BuildConfig.DEBUG) hu_uti.loge ("profile: " + profile);
+    //hu_uti.loge ("profile: " + profile);
     return (prof);
   }
 
   private boolean codec_input_provide (ByteBuffer content) {
     if (hu_uti.ena_log_verbo)
-      if (BuildConfig.DEBUG) hu_uti.logv ("content: " + content);
-    //if (BuildConfig.DEBUG) hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
+      hu_uti.logv ("content: " + content);
+    //hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
 
     try {
       final int index = m_codec.dequeueInputBuffer (0);                 // java.lang.IllegalStateException
@@ -807,7 +822,7 @@ surface_update (null);
         content.limit (limit);                                          // Restore original limit
       }
       buffer.flip ();
-      //if (BuildConfig.DEBUG) hu_uti.logd ("buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
+      //hu_uti.logd ("buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
       m_codec.queueInputBuffer (index, 0, buffer.limit (), 0, 0);
       return (true);                                                    // Processed
     }
@@ -819,7 +834,7 @@ surface_update (null);
   }
 
   private void codec_output_consume () {
-    //if (BuildConfig.DEBUG) hu_uti.logd ("");
+    //hu_uti.logd ("");
     for (;;) {
       final int index = m_codec.dequeueOutputBuffer (m_codec_buf_info, 0);
       if (index >= 0) {
@@ -840,7 +855,7 @@ surface_update (null);
         fos.close ();                                                     // Close output file
       }
       catch (Throwable t) {
-        if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+        hu_uti.loge ("Throwable: " + t);
         //return;
       }
 
@@ -856,7 +871,7 @@ surface_update (null);
         fos = this.openFileOutput ("/sdcard/hurec.h264", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
       }
       catch (Throwable t) {
-        //if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+        //hu_uti.loge ("Throwable: " + t);
         if (lim_scrn_debug ()) screen_loge ("Throwable: " + t);
         //return;
       }
@@ -865,7 +880,7 @@ surface_update (null);
           fos = this.openFileOutput ("hurec.h264", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
       }
       catch (Throwable t) {
-        //if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+        //hu_uti.loge ("Throwable: " + t);
         if (lim_scrn_debug ()) screen_loge ("Throwable: " + t);
         return;
       }
@@ -878,19 +893,19 @@ surface_update (null);
     int last = pos + siz - 1;
     byte [] ba = content.array ();
     if (ba == null) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + hu_uti.hex_get (siz) + ")  last: " + last);
+      hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + hu_uti.hex_get (siz) + ")  last: " + last);
       return;
     }
     byte b1 = ba [pos + 3];
     byte bl = ba [last];
     if (hu_uti.ena_log_verbo)
-      if (BuildConfig.DEBUG) hu_uti.logv ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
+      hu_uti.logv ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
     
     try {
       fos.write (ba, pos, siz);                                               // Copy input to output file
     }
     catch (Throwable t) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
       return;
     }
   }
@@ -912,7 +927,7 @@ surface_update (null);
     //screen_logd ("content: " + content);
 
     if (hu_uti.ena_log_verbo)
-      if (BuildConfig.DEBUG) hu_uti.logv ("content: " + content);
+      hu_uti.logv ("content: " + content);
 
     if (content == null) {
       return;
@@ -932,7 +947,7 @@ surface_update (null);
 
 
 
-    if (hu_uti.file_get ("/sdcard/hurec"))
+    if (hu_uti.quiet_file_get ("/sdcard/hurec"))
       video_record_write (content);
 
     else if (video_recording)
@@ -966,45 +981,45 @@ surface_update (null);
 
     // ANDROID_ID and TelephonyManager.getDeviceId()
     String android_id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
-    if (BuildConfig.DEBUG) hu_uti.logd ("android_id: " + android_id);                         // android_id: c5da68763daf5900
+    hu_uti.logd ("android_id: " + android_id);                         // android_id: c5da68763daf5900
 
     //UUID deviceUuid = new UUID(androidId.hashCode(), ((long)tmDevice.hashCode() << 32) | tmSerial.hashCode());
     //String deviceId = deviceUuid.toString();
 
     android.bluetooth.BluetoothAdapter m_BluetoothAdapter =  	android.bluetooth.BluetoothAdapter.getDefaultAdapter(); 
     String bluetooth_add = m_BluetoothAdapter.getAddress();
-    if (BuildConfig.DEBUG) hu_uti.logd ("bluetooth_add: " + bluetooth_add);                   // bluetooth_add: B4:CE:F6:34:49:CD
+    hu_uti.logd ("bluetooth_add: " + bluetooth_add);                   // bluetooth_add: B4:CE:F6:34:49:CD
 
     android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) this.getSystemService (Context.WIFI_SERVICE);
     String wifi_mac_address = "";
     if (wm == null)
-      if (BuildConfig.DEBUG) hu_uti.loge ("wm: " + wm);
+      hu_uti.loge ("wm: " + wm);
     else
       wifi_mac_address = wm.getConnectionInfo ().getMacAddress ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("wifi_mac_address: " + wifi_mac_address);             // On some devices, it's not available when Wi-Fi is turned off
+    hu_uti.logd ("wifi_mac_address: " + wifi_mac_address);             // On some devices, it's not available when Wi-Fi is turned off
 
     android.telephony.TelephonyManager tm = (android.telephony.TelephonyManager) this.getSystemService (Context.TELEPHONY_SERVICE);
     String tmdi = tm.getDeviceId ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("tmdi: " + tmdi);                                     // tmdi: null
+    hu_uti.logd ("tmdi: " + tmdi);                                     // tmdi: null
     String sim_serial = tm.getSimSerialNumber ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("sim_serial: " + sim_serial);                         // sim_serial: null
+    hu_uti.logd ("sim_serial: " + sim_serial);                         // sim_serial: null
 
     String serial = "";
     try {
       serial = android.os.Build.class.getField ("SERIAL").get (null).toString ();
-      if (BuildConfig.DEBUG) hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
+      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
     }
     catch (Throwable t) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Throwable t: " + t);
+      hu_uti.loge ("Throwable t: " + t);
     }
     try {
       Class<?> c = Class.forName ("android.os.SystemProperties");
       java.lang.reflect.Method get = c.getMethod ("get", String.class);
       serial = (String) get.invoke (c, "ro.serialno");
-      if (BuildConfig.DEBUG) hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
+      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
     }
     catch (Throwable t) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Throwable t: " + t);
+      hu_uti.loge ("Throwable t: " + t);
     }
   }
 */

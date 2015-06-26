@@ -522,7 +522,7 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
     struct libusb_config_descriptor * config = NULL;
     usb_err = libusb_get_config_descriptor (iusb_best_device, 0, & config);
     if (usb_err != 0) {
-      loge ("Error libusb_get_config_descriptor usb_err: %d (%s)", usb_err, iusb_error_get (usb_err));
+      logd ("Expected Error libusb_get_config_descriptor usb_err: %d (%s)", usb_err, iusb_error_get (usb_err));    // !! ???? Normal error now ???
       //return (-1);
       iusb_ep_in  = ep_in_addr; //129;                                  // Set  input endpoint
       iusb_ep_out = ep_out_addr;//  2;                                  // Set output endpoint

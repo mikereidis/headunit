@@ -266,7 +266,7 @@ public class hu_tro {
           int dump_size = send_size;
           if (dump_size > max_dump_size)
             dump_size = max_dump_size;
-          if (BuildConfig.DEBUG) hu_uti.hex_dump ("TX: ", m_bb_out, dump_size);
+          hu_uti.hex_dump ("TX: ", m_bb_out, dump_size);
         }
         io_write (ba_out, 0, send_size);                                // Send packet
         return (true);                                                  // Done OK
@@ -350,7 +350,7 @@ public class hu_tro {
           int dump_size = size;
           if (dump_size > max_dump_size)
             dump_size = max_dump_size;
-          if (BuildConfig.DEBUG) hu_uti.hex_dump ("rx: ", buffer, dump_size);
+          hu_uti.hex_dump ("rx: ", buffer, dump_size);
         }
 
 

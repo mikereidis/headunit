@@ -548,19 +548,19 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     return (prot_func_ret);
   }
 
-  int hu_aap_stop () {                                                 // Sends Byebye, then stops USB/ACC/OAP
+  int hu_aap_stop () {                                                  // Sends Byebye, then stops USB/ACC/OAP
     // Send Byebye
     iaap_state = hu_STATE_STOPPIN;
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
-    int ret = hu_usb_stop ();                                          // Stop USB/ACC/OAP
+    int ret = hu_usb_stop ();                                           // Stop USB/ACC/OAP
     iaap_state = hu_STATE_STOPPED;
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
     return (ret);
   }
 
-  int hu_aap_start (byte ep_in_addr, byte ep_out_addr) {               // Starts USB/ACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
+  int hu_aap_start (byte ep_in_addr, byte ep_out_addr) {                // Starts USB/ACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
 
     if (iaap_state == hu_STATE_STARTED) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
@@ -570,7 +570,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     iaap_state = hu_STATE_STARTIN;
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
-    int ret = hu_usb_start (ep_in_addr, ep_out_addr);                  // Start USB/ACC/OAP
+    int ret = hu_usb_start (ep_in_addr, ep_out_addr);                   // Start USB/ACC/OAP
     if (ret) {
       iaap_state = hu_STATE_STOPPED;
       logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
@@ -579,7 +579,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
 
     byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 1};                    // Version Request
     ret = hu_aap_usb_set (0, 3, 1, vr_buf, sizeof (vr_buf));
-    ret = hu_aap_usb_send (vr_buf, sizeof (vr_buf), 1000);             // Send Version Request
+    ret = hu_aap_usb_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
     if (ret < 0) {
       loge ("Version request send ret: %d", ret);
       hu_aap_stop ();
@@ -588,7 +588,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
 
     byte buf [DEFBUF] = {0};
     errno = 0;
-    ret = hu_aap_usb_recv (buf, sizeof (buf), 1000);                   // Get Rx packet from USB:    Wait for Version Response
+    ret = hu_aap_usb_recv (buf, sizeof (buf), 1000);                    // Get Rx packet from USB:    Wait for Version Response
     if (ret <= 0) {
       loge ("Version response recv ret: %d", ret);
       hu_aap_stop ();
@@ -597,7 +597,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     logd ("Version response recv ret: %d", ret);
 
 //*
-    ret = hu_ssl_handshake ();                                         // Do SSL Client Handshake with AA SSL server
+    ret = hu_ssl_handshake ();                                          // Do SSL Client Handshake with AA SSL server
     if (ret) {
       hu_aap_stop ();
       return (ret);
@@ -605,7 +605,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
 
     byte ac_buf [] = {0, 3, 0, 4, 0, 4, 8, 0};                          // Status = OK
     ret = hu_aap_usb_set (0, 3, 4, ac_buf, sizeof (ac_buf));
-    ret = hu_aap_usb_send (ac_buf, sizeof (ac_buf), 1000);             // Auth Complete, must be sent in plaintext
+    ret = hu_aap_usb_send (ac_buf, sizeof (ac_buf), 1000);              // Auth Complete, must be sent in plaintext
     if (ret < 0) {
       loge ("hu_aap_usb_send() ret: %d", ret);
       hu_aap_stop ();
@@ -665,15 +665,15 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 
     int rmv = 0;
 #ifndef NDEBUG
-//    if (chan != AA_CH_VID)                                              // If not video...
-      rmv = hu_aad_dmp ("DR: ", 2, dec_buf, bytes_read);               // Dump decrypted AA
+//    if (chan != AA_CH_VID)                                            // If not video...
+      rmv = hu_aad_dmp ("DR: ", 2, dec_buf, bytes_read);                // Dump decrypted AA
 #endif
 
     int prot_func_ret = iaap_msg_process (chan, flags, dec_buf, bytes_read);   // Process decrypted AA protocol message
     return (0);//prot_func_ret);
   }
 
-  int hu_aap_recv_process () {                                         // Process 1 encrypted receive message set, from reading encrypted message from USB to reacting to decrypted message
+  int hu_aap_recv_process () {                                          // Process 1 encrypted receive message set, from reading encrypted message from USB to reacting to decrypted message
     if (iaap_state != hu_STATE_STARTED && iaap_state != hu_STATE_STARTIN) {   // Need to recv when starting) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (-1);

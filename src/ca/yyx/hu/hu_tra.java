@@ -69,7 +69,7 @@ public class hu_tra {
   private final class vid_thread extends Thread {                       // Video thread
     private volatile boolean m_stopping = false;                        // Set true when stopping
     public vid_thread () {
-      /*if (BuildConfig.DEBUG)  super ("vid_thread");                     // Name video thread
+      /* super ("vid_thread");                     // Name video thread
       else*/                    super ("vid_thread");
     }
     @Override
@@ -104,33 +104,33 @@ public class hu_tra {
 
 
   public int transport_stop () {
-    if (BuildConfig.DEBUG) hu_uti.logd ("");
+    hu_uti.logd ("");
     byebye_send ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("calling usb_stop()");
+    hu_uti.logd ("calling usb_stop()");
     usb_stop ();
     if (m_vid_thread != null) {                                          // If video thread...
       m_vid_thread.quit ();                                              // Terminate video thread using it's quit() API
     }
-    if (BuildConfig.DEBUG) hu_uti.logd ("done");
+    hu_uti.logd ("done");
     return (0);
   }
 
 
   public int transport_start (Intent intent) {                          // Called only by hu_act:onCreate()
-    if (BuildConfig.DEBUG) hu_uti.logd ("");// intent: " + intent);
+    hu_uti.logd ("");// intent: " + intent);
 
     if (m_usb_connected) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Already m_usb_connected: " + m_usb_connected);
+      hu_uti.loge ("Already m_usb_connected: " + m_usb_connected);
       return (-1);
     }
-    if (BuildConfig.DEBUG) hu_uti.logd ("calling usb_start()");
+    hu_uti.logd ("calling usb_start()");
     usb_start (intent);
 
     if (! m_usb_connected) {
-      if (BuildConfig.DEBUG) hu_uti.logd ("done w/ USB NOT connected");
+      hu_uti.logd ("done w/ USB NOT connected");
       return (-1);
     }
-    if (BuildConfig.DEBUG) hu_uti.logd ("done w/ USB connected");
+    hu_uti.logd ("done w/ USB connected");
     return (0);
   }
 
@@ -142,22 +142,23 @@ public class hu_tra {
     int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null);           // Send: Start USB & AA
 
     if (ret == 0) {                                                     // If started OK...
-      if (BuildConfig.DEBUG) hu_uti.logd ("aa_cmd_send ret:" + ret);
+      hu_uti.logd ("aa_cmd_send ret:" + ret);
       m_vid_thread = new vid_thread ();                                   
       m_vid_thread.start ();                                            // Create and start video thread
     }
     else
-      if (BuildConfig.DEBUG) hu_uti.loge ("aa_cmd_send ret:" + ret);
+      hu_uti.loge ("aa_cmd_send ret:" + ret);
     return (ret);
   }
 
   private int byebye_send () {
-    if (BuildConfig.DEBUG) hu_uti.logd ("");
+    hu_uti.logd ("");
     byte [] cmd_buf = {0, 0x0b, 0, 4, 0, 15, 0x08, 0};                  // Byebye Request
     int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null);           // Send
     hu_uti.ms_sleep (100);                                              // Wait a bit for response
     return (ret);
   }
+
 
 
   int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf) {    // Main processing loop
@@ -200,9 +201,9 @@ public class hu_tra {
     int err_ctr = 0;
     while (new_touch) {
       if (err_ctr ++ % 50 == 0)
-        if (BuildConfig.DEBUG) hu_uti.logd ("Waiting for new_touch = false");
+        hu_uti.logd ("Waiting for new_touch = false");
       if (err_ctr > 200) {
-        if (BuildConfig.DEBUG) hu_uti.loge ("Timeout waiting for new_touch = false");
+        hu_uti.loge ("Timeout waiting for new_touch = false");
         return;
       }
       hu_uti.ms_sleep (1);
@@ -212,7 +213,7 @@ public class hu_tra {
   /*  if (action == 2) {
         long this_move_ms = hu_uti.tmr_ms_get ();
         if (last_move_ms + 50 > this_move_ms) {
-          if (BuildConfig.DEBUG) hu_uti.loge ("Dropping motion this_move_ms: " + this_move_ms + "  last_move_ms: " + last_move_ms);
+          hu_uti.loge ("Dropping motion this_move_ms: " + this_move_ms + "  last_move_ms: " + last_move_ms);
           return;
         }
         last_move_ms = this_move_ms;
@@ -277,7 +278,7 @@ public class hu_tra {
     String action = "";
     if (intent != null)
       action = intent.getAction ();
-    if (BuildConfig.DEBUG) hu_uti.logd ("intent: " + intent);// + "  action: " + action);
+    hu_uti.logd ("intent: " + intent);// + "  action: " + action);
 
     IntentFilter filter = new IntentFilter ();
     filter.addAction (UsbManager.ACTION_USB_DEVICE_ATTACHED);
@@ -371,7 +372,7 @@ public class hu_tra {
 
   public void usb_stop () {                                             // Called only by transport_stop()
 
-    if (BuildConfig.DEBUG) hu_uti.logd ("m_usb_receiver: " + m_usb_receiver);
+    hu_uti.logd ("m_usb_receiver: " + m_usb_receiver);
 
     if (m_usb_receiver != null)
       m_context.unregisterReceiver (m_usb_receiver);
@@ -432,11 +433,11 @@ public class hu_tra {
 
       if (hu_act.m_disable_alleged_google_dda_4_4_violation) {
         if (m_hu_act.ls_debug) m_hu_act.ld ("Success so far, terminating startup due to m_disable_alleged_google_dda_4_4_violation");
-        return;// (-1);                                                      // Kill it so Google has no basis to claim DDA section 4.4 violation. Android Auto won't work and this app reduced to USB test
+        return;                                                         // Kill it so Google has no basis to claim DDA section 4.4 violation. Android Auto won't work and this app reduced to USB test
       }
 
 
-      m_hu_act.ui_video_started_set (true);
+      m_hu_act.ui_video_started_set (true);                             // Enable video/disable log view
       int ret = jni_start ();
       if (m_hu_act.ls_debug) m_hu_act.ld ("jni_start() ret: " + ret);
     }
@@ -763,7 +764,7 @@ public class hu_tra {
       return -1;
     }
     int oap_version = (buffer [1] << 8) | buffer  [0];
-    if (BuildConfig.DEBUG) hu_uti.logd ("Success controlTransfer len: " + len + "  oap_version: " + oap_version);
+    hu_uti.logd ("Success controlTransfer len: " + len + "  oap_version: " + oap_version);
     return (oap_version);
   }
 
@@ -782,7 +783,7 @@ public class hu_tra {
       if (m_hu_act.ls_debug) m_hu_act.le ("Error controlTransfer len: " + len + "  index: " + index + "  string: \"" + string + "\"");
     }
     else {
-      if (BuildConfig.DEBUG) hu_uti.logd ("Success controlTransfer len: " + len + "  index: " + index + "  string: \"" + string + "\"");
+      hu_uti.logd ("Success controlTransfer len: " + len + "  index: " + index + "  string: \"" + string + "\"");
     }
   }
 

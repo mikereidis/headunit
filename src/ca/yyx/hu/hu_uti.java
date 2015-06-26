@@ -1,7 +1,7 @@
 
     // General utility functions
 
-// if (BuildConfig.DEBUG) hu_uti.log
+// hu_uti.log
 
 
 package ca.yyx.hu;
@@ -52,21 +52,21 @@ public final class hu_uti  {
 
   public hu_uti () {                                                    // Default constructor
 
-    //if (BuildConfig.DEBUG) hu_uti.logd ("m_obinits: " + m_obinits++);   // !! Can't log from internal code, class is not set up yet !!
+    //hu_uti.logd ("m_obinits: " + m_obinits++);   // !! Can't log from internal code, class is not set up yet !!
     final String tag = tag_prefix_get () + "comuti";
     m_obinits ++;
-    if (BuildConfig.DEBUG) Log.d (tag, "m_obinits: " + m_obinits);
+    Log.d (tag, "m_obinits: " + m_obinits);
 
 
     Thread.setDefaultUncaughtExceptionHandler (new Thread.UncaughtExceptionHandler () {
       public void uncaughtException (Thread aThread, Throwable aThrowable) {
-        //if (BuildConfig.DEBUG) hu_uti.loge ("!!!!!!!! Uncaught exception: " + aThrowable);
-        if (BuildConfig.DEBUG) Log.e (tag, "!!!!!!!! Uncaught exception: " + aThrowable);
+        //hu_uti.loge ("!!!!!!!! Uncaught exception: " + aThrowable);
+        Log.e (tag, "!!!!!!!! Uncaught exception: " + aThrowable);
       }
     });
-    //if (BuildConfig.DEBUG) hu_uti.loge ("done");
+    //hu_uti.loge ("done");
 
-    if (BuildConfig.DEBUG) Log.e (tag, "done");
+    Log.e (tag, "done");
   }
 
     // Android Logging Levels:
@@ -88,8 +88,8 @@ public final class hu_uti  {
         tag_prefix = "s!";
     }
     catch (Throwable e) {
-      //if (BuildConfig.DEBUG) hu_uti.loge ("Throwable e: " + e);
-      if (BuildConfig.DEBUG) Log.e ("hucomuti", "Throwable e: " + e);
+      //hu_uti.loge ("Throwable e: " + e);
+      Log.e ("hucomuti", "Throwable e: " + e);
       e.printStackTrace ();
       tag_prefix = "E!";
     }
@@ -165,9 +165,9 @@ public final class hu_uti  {
   public static boolean main_thread_get (String source) {
     boolean ret = (Looper.myLooper () == Looper.getMainLooper ());
     if (ret)
-      if (BuildConfig.DEBUG) hu_uti.logd ("YES MAIN THREAD source: " + source);
+      hu_uti.logd ("YES MAIN THREAD source: " + source);
     //else
-    //  if (BuildConfig.DEBUG) hu_uti.logd ("Not main thread source: " + source);
+    //  hu_uti.logd ("Not main thread source: " + source);
     return (ret);
   }
 
@@ -204,7 +204,7 @@ public final class hu_uti  {
   public static long ms_sleep (long ms) {
     //main_thread_get ("ms_sleep ms: " + ms);
 
-    //if (BuildConfig.DEBUG) hu_uti.logw ("ms: " + ms);                                       // Warning
+    //hu_uti.logw ("ms: " + ms);                                       // Warning
 
     try {
       Thread.sleep (ms);                                                // Wait ms milliseconds
@@ -213,7 +213,7 @@ public final class hu_uti  {
     catch (InterruptedException e) {
       //Thread.currentThread().interrupt();
       e.printStackTrace ();
-      if (BuildConfig.DEBUG) hu_uti.loge ("Exception e: " + e);
+      hu_uti.loge ("Exception e: " + e);
       return (0);
     }
   }
@@ -277,14 +277,14 @@ public final class hu_uti  {
     for (idx = 0; idx < len && idx < size; idx ++) {
       str += hex_get (ba [idx]) + " ";
       if (idx % 16 == 15) {
-        //if (BuildConfig.DEBUG) hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
-        if (BuildConfig.DEBUG) hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
+        //hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
+        hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
         str = "";
       }
     }
     if (! str.equals ("")) {
-      //if (BuildConfig.DEBUG) hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
-      if (BuildConfig.DEBUG) hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
+      //hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
+      hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
     }
   }
 
@@ -296,7 +296,7 @@ public final class hu_uti  {
     for (int i = 0; i < content.length; i ++) {
       content [i] = (byte) buffer [i];
       //if (content [i] == -3) {            // ??
-      //  if (BuildConfig.DEBUG) hu_uti.loge ("s: " + s);//content [i]);
+      //  hu_uti.loge ("s: " + s);//content [i]);
       //  content [i] = '~';
       //}
     }
@@ -317,7 +317,7 @@ public final class hu_uti  {
 
   public static int varint_encode (int val, byte [] ba, int idx) {
     if (val >= 1 << 14) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Too big");
+      hu_uti.loge ("Too big");
       return (1);
     }
     ba [idx+0] = (byte) (0x7f & (val >> 0));
@@ -331,7 +331,7 @@ public final class hu_uti  {
 
   public static int varint_encode (long val, byte [] ba, int idx) {
     if (val >= 0x7fffffffffffffffL) {
-      if (BuildConfig.DEBUG) hu_uti.loge ("Too big");
+      hu_uti.loge ("Too big");
       return (1);
     }
     long left = val;
@@ -375,8 +375,8 @@ public final class hu_uti  {
       fos.close ();                                                     // Close file
     }
     catch (Throwable t) {
-      //if (BuildConfig.DEBUG) hu_uti.loge ("Throwable t: " + t);
-      if (BuildConfig.DEBUG) Log.e ("hucomuti", "Throwable t: " + t);
+      //hu_uti.loge ("Throwable t: " + t);
+      Log.e ("hucomuti", "Throwable t: " + t);
       t.printStackTrace ();
       return (-1);
     }
@@ -415,7 +415,7 @@ public final class hu_uti  {
       ret = true;
     else if (hu_uti.file_get ("/system/xbin/su"))
       ret = true;
-    if (BuildConfig.DEBUG) hu_uti.logd ("ret: " + ret);
+    hu_uti.logd ("ret: " + ret);
     return (ret);
   }
 
@@ -428,7 +428,7 @@ public final class hu_uti  {
   }
 
   private static int arr_sys_run (String [] cmds, boolean su) {         // !! Crash if any output to stderr !!
-    //if (BuildConfig.DEBUG) hu_uti.logd ("sys_run: " + cmds);
+    //hu_uti.logd ("sys_run: " + cmds);
 
     try {
       Process p;
@@ -438,7 +438,7 @@ public final class hu_uti  {
         p = Runtime.getRuntime ().exec ("sh");
       DataOutputStream os = new DataOutputStream (p.getOutputStream ());
       for (String line : cmds) {
-        if (BuildConfig.DEBUG) hu_uti.logd ("su: " + su + "  line: " + line);
+        hu_uti.logd ("su: " + su + "  line: " + line);
         os.writeBytes (line + "\n");
       }           
       os.writeBytes ("exit\n");  
@@ -446,16 +446,16 @@ public final class hu_uti  {
 
       int exit_val = p.waitFor ();                                      // This could hang forever ?
       if (exit_val != 0)
-        if (BuildConfig.DEBUG) hu_uti.logw ("cmds [0]: " + cmds [0] + "  exit_val: " + exit_val);
+        hu_uti.logw ("cmds [0]: " + cmds [0] + "  exit_val: " + exit_val);
       else
-        if (BuildConfig.DEBUG) hu_uti.logd ("cmds [0]: " + cmds [0] + "  exit_val: " + exit_val);
+        hu_uti.logd ("cmds [0]: " + cmds [0] + "  exit_val: " + exit_val);
 
       //os.flush ();
       return (exit_val);
     }
     catch (Exception e) {
       //e.printStackTrace ();
-      if (BuildConfig.DEBUG) hu_uti.loge ("Exception e: " + e);
+      hu_uti.loge ("Exception e: " + e);
     };
     return (-1);
   }
@@ -471,11 +471,11 @@ public final class hu_uti  {
     }
     catch (Exception e) {
       //e.printStackTrace ();
-      if (BuildConfig.DEBUG) hu_uti.loge ("Exception: " + e );
+      hu_uti.loge ("Exception: " + e );
       exists = false;                                                   // Exception means no file or no permission for file
     } 
     if (log)
-      if (BuildConfig.DEBUG) hu_uti.logd ("exists: " + exists + "  \'" + filename + "\'");
+      hu_uti.logd ("exists: " + exists + "  \'" + filename + "\'");
     return (exists);
   }
   public static boolean quiet_file_get (String filename) {
