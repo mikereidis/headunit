@@ -266,15 +266,15 @@
   }
 
 
-#ifndef AA_NO_MAIN
-  int main (int argc, char * argv []) {
-    int ret = hu_usb_run ();
-    while (1) {
-      //aa_com_process ();                                    // Process 1 message
-      ms_sleep (30);
-    }
-
-    return (ret);
-  }
-#endif
+//#ifndef AA_NO_MAIN
+//  int main (int argc, char * argv []) {
+//    int ret = hu_usb_run ();
+//    while (1) {
+//      //aa_com_process ();                                    // Process 1 message
+//      ms_sleep (30);
+//    }
+//
+//    return (ret);
+//  }
+//#endif
 

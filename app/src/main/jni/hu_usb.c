@@ -116,7 +116,6 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
   byte  iusb_best_pro [256] = {0};
 
 
-#ifndef NDEBUG
 
   char * iusb_error_get (int error) {
     switch (error) {
@@ -183,7 +182,6 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
     }
   }
   */
-#endif
 
   int iusb_bulk_transfer (int ep, byte * buf, int len, int tmo) { // 0 = unlimited timeout
     char * dir = "recv";

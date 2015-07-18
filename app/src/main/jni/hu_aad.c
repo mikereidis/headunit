@@ -97,18 +97,18 @@
     iaad_adj (& rmv, & buf, & lft, adj);
 
     if (log_dmp) {
-      //logd ("n: %1.1d  num: %1.1d  vint: %20ld", n, num, vint);
-      //logd ("%1.1d  %1.1d  %6ld", n, num, vint);
+      logd ("n: %1.1d  num: %1.1d  vint: %20ld", n, num, vint);
+      logd ("%1.1d  %1.1d  %6ld", n, num, vint);
 
       unsigned char str_buf [256] = {0};
-      //snprintf (str_buf, sizeof (str_buf), "%1.1d", num);
+      snprintf (str_buf, sizeof (str_buf), "%1.1d", num);
       int ctr = 0;
       for (ctr = 0; ctr < n - 1; ctr ++)
         strncat (str_buf, "                    ", sizeof (str_buf));
 
 
-      //unsigned char str_buf2 [256] = {0};
-      //snprintf (str_buf2, sizeof (str_buf), "%s%1.1d", str_buf, num);
+      unsigned char str_buf2 [256] = {0};
+      snprintf (str_buf2, sizeof (str_buf), "%s%1.1d", str_buf, num);
       logd ("%s%1.1d %4x %5ld", str_buf, num, vint, vint);
     }
     return (rmv);
@@ -118,7 +118,7 @@
 
   unsigned int iaad_dmp_arry (int log_dmp, unsigned int n, unsigned char * buf, unsigned int len) {
     if (n > 8) {
-      //if (log_dmp)
+      if (log_dmp)
         loge ("iaad_dmp_arry n: %d", n);
     }
     unsigned int rmv = 0, adj = 0;
@@ -134,7 +134,7 @@
         loge ("iaad_dmp_arry iaad_vint_dec adj: %d  alen: %ld", adj, alen);
       return (0xffffffff);
     }
-    //logd ("iaad_dmp_arry iaad_vint_dec adj: %d  alen: %ld", adj, alen);
+    logd ("iaad_dmp_arry iaad_vint_dec adj: %d  alen: %ld", adj, alen);
     iaad_adj (& rmv, & buf, & lft, adj);                                  // Point to array
 
     if (alen == 0)
@@ -146,7 +146,7 @@
     }
 
     if (log_dmp) {
-      //logd ("iaad_dmp_arry n: %d  num: %d  alen: %ld", n, num, alen);      // Dump raw array
+      logd ("iaad_dmp_arry n: %d  num: %d  alen: %ld", n, num, alen);      // Dump raw array
       unsigned char str_buf [256] = {0};
       int ctr = 0;
       for (ctr = 0; ctr < n - 1; ctr ++)
@@ -159,7 +159,7 @@
 
     adj = iaad_dmp_n (0, n + 1, buf, alen);                              // Try first without error logging to see if this is a valid array
     if (adj != alen || adj > 8192) {                                            //  "|| rmv + adj != len) {" only works if array is last item in packet
-      //logd ("Array not embedded data adj: %d  alen: %ld  rmv: %d  len: %d", adj, alen, rmv, len);
+      logd ("Array not embedded data adj: %d  alen: %ld  rmv: %d  len: %d", adj, alen, rmv, len);
       return (rmv + alen);
     }
 
@@ -179,7 +179,7 @@
     unsigned int lft = len;
 
     while (lft > 0) {                                                   // While bytes left to process...
-      //loge ("!!!! 1  n: %d  adj: %d  len: %d  lft: %d  rmv: %d  buf: %p", n, adj, len, lft, rmv, buf);
+      loge ("!!!! 1  n: %d  adj: %d  len: %d  lft: %d  rmv: %d  buf: %p", n, adj, len, lft, rmv, buf);
       if ((((unsigned int) buf [0]) & 0x07) == 0) {                     // If varint...
         adj = iaad_dmp_vint (log_dmp, n, buf, lft);                      // Adjust past the varint
       }
@@ -195,7 +195,7 @@
       }
 
       iaad_adj (& rmv, & buf, & lft, adj);                                // Apply adjustment
-      //loge ("!!!! 2  n: %d  adj: %d  len: %d  lft: %d  rmv: %d  buf: %p", n, adj, len, lft, rmv, buf);
+      loge ("!!!! 2  n: %d  adj: %d  len: %d  lft: %d  rmv: %d  buf: %p", n, adj, len, lft, rmv, buf);
     }
 
     if (lft != 0 || rmv != len || rmv < 0)
@@ -250,7 +250,7 @@
       return (rmv);
     }
 
-    //hex_dump ("0  ", 16, buf, len - 2);
+    hex_dump ("0  ", 16, buf, len - 2);
 
     adj = iaad_dmp_n (1, 1, buf, lft);                                   // Dump the content w/ n=1
     iaad_adj (& rmv, & buf, & lft, adj);                                  // Adjust past the content (to nothing, presumably)

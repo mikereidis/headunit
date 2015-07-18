@@ -6,44 +6,23 @@
 
 package ca.yyx.hu;
 
-import android.bluetooth.BluetoothAdapter;
-import android.net.NetworkInfo;
-import android.os.Bundle;
 import android.os.StrictMode;
 import android.os.Looper;
-import android.telephony.TelephonyManager;
 import android.util.Log;
-import android.content.SharedPreferences;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 
-import java.net.SocketTimeoutException;
-import java.util.Date;
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Locale;
-import java.util.TimeZone;
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileReader;
-import java.io.OutputStream;
 
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import java.io.FileInputStream;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 
-
-public final class hu_uti  {
+    public final class hu_uti  {
 
     // Stats:
   private static int            m_obinits = 0;
@@ -504,7 +483,7 @@ public final class hu_uti  {
 
   public static boolean file_create (final String filename) {
     main_thread_get ("file_create filename: " + filename);
-    java.io.File f = null;
+    File f = null;
     boolean ret = false;
     try {
       f = new File (filename);

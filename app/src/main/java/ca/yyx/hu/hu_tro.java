@@ -5,7 +5,6 @@
 
 package ca.yyx.hu;
 
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;

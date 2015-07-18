@@ -48,11 +48,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Timer;
 
-import android.hardware.Camera;
+
 import android.media.CamcorderProfile;
 
 public class hu_act extends Activity implements SurfaceHolder.Callback {
@@ -247,7 +246,7 @@ public class hu_act extends Activity implements SurfaceHolder.Callback {
     screen_logd (intro1_str);
 
 String intro2_str = "";
-    if (this.getPackageManager ().hasSystemFeature (android.content.pm.PackageManager.FEATURE_USB_HOST))
+    if (this.getPackageManager ().hasSystemFeature (PackageManager.FEATURE_USB_HOST))
       intro2_str = "This device/ROM must support USB Host Mode\n";
     else
       intro2_str = "This device/ROM must support USB Host Mode AND IT DOES NOT APPEAR TO BE SUPPORTED !!!!!!!!!!\n";
