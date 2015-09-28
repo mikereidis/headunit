@@ -4,6 +4,7 @@
   #define LOGTAG "hu_usb"
   #include "hu_uti.h"                                                  // Utilities
   #include "hu_oap.h"                                                  // Open Accessory Protocol
+  #include "hu_usb.h"
 
   int iusb_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
 
