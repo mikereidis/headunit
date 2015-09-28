@@ -1,9 +1,16 @@
+#include <glib.h>
 #include <stdio.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
+#include <gst/video/videooverlay.h>
+#include <QApplication>
+//#include <QWidget>
+#include <QMainWindow>
+#include <QMouseEvent>
+
+
 #include "hu_uti.h"
 #include "hu_aap.h"
-
 
 typedef struct {
 	GstPipeline *pipeline;
@@ -11,8 +18,6 @@ typedef struct {
 	GstElement *sink;
 	GstElement *decoder;
 	GstElement *convert;
-	GstElement *autovideosink;
-	GMainLoop *loop;
 	guint sourceid;
 } gst_app_t;
 
@@ -38,7 +43,7 @@ static gboolean read_data(gst_app_t *app)
 	if (vbuf != NULL) {
 		printf("vbuf: %p  res_len: %d\n", vbuf, res_len);
 
-		ptr= g_malloc(res_len);
+		ptr = (guint8 *)g_malloc(res_len);
 		g_assert(ptr);
 		memcpy(ptr, vbuf, res_len);
 
@@ -124,7 +129,7 @@ static gboolean bus_callback(GstBus *bus, GstMessage *message, gpointer *ptr)
 					       g_print("Error %s\n", err->message);
 					       g_error_free(err);
 					       g_free(debug);
-					       g_main_loop_quit(app->loop);
+//					       g_main_loop_quit(app->loop);
 				       }
 				       break;
 
@@ -136,7 +141,7 @@ static gboolean bus_callback(GstBus *bus, GstMessage *message, gpointer *ptr)
 						 gst_message_parse_warning(message, &err, &debug);
 						 g_print("Warning %s\nDebug %s\n", err->message, debug);
 
-						 name = GST_MESSAGE_SRC_NAME(message);
+						 name = (gchar *)GST_MESSAGE_SRC_NAME(message);
 
 						 g_print("Name of src %s\n", name ? name : "nil");
 						 g_error_free(err);
@@ -146,7 +151,7 @@ static gboolean bus_callback(GstBus *bus, GstMessage *message, gpointer *ptr)
 
 		case GST_MESSAGE_EOS:
 					 g_print("End of stream\n");
-					 g_main_loop_quit(app->loop);
+//					 g_main_loop_quit(app->loop);
 					 break;
 
 		case GST_MESSAGE_STATE_CHANGED:
@@ -176,27 +181,27 @@ static int gst_pipeline_init(gst_app_t *app)
 	app->src = (GstAppSrc*)gst_element_factory_make("appsrc", "mysrc");
 	app->decoder = gst_element_factory_make("decodebin", "mydecoder");
 	app->convert = gst_element_factory_make("videoconvert", "myconvert");
-	app->autovideosink = gst_element_factory_make("autovideosink", "myvsink");
+	app->sink = gst_element_factory_make("xvimagesink", "myvsink");
 
 	g_assert(app->src);
 	g_assert(app->decoder);
 	g_assert(app->convert);
-	g_assert(app->autovideosink);
+	g_assert(app->sink);
 
 	g_signal_connect(app->src, "need-data", G_CALLBACK(start_feed), app);
 	g_signal_connect(app->src, "enough-data", G_CALLBACK(stop_feed), app);
-	g_signal_connect(app->decoder, "pad-added", 
+	g_signal_connect(app->decoder, "pad-added",
 			G_CALLBACK(on_pad_added), app->decoder);
 
-	gst_bin_add_many(GST_BIN(app->pipeline), (GstElement*)app->src, 
-			app->decoder, app->convert, app->autovideosink, NULL);
+	gst_bin_add_many(GST_BIN(app->pipeline), (GstElement*)app->src,
+			app->decoder, app->convert, app->sink, NULL);
 
 	if(!gst_element_link((GstElement*)app->src, app->decoder)){
 		g_warning("failed to link src anbd decoder");
 	}
 
-	if(!gst_element_link(app->convert, app->autovideosink)){
-		g_warning("failed to link convert and xvsink");
+	if(!gst_element_link(app->convert, app->sink)){
+		g_warning("failed to link convert and sink");
 	}
 
 	gst_app_src_set_stream_type(app->src, GST_APP_STREAM_TYPE_STREAM);
@@ -204,22 +209,40 @@ static int gst_pipeline_init(gst_app_t *app)
 	return 0;
 }
 
-static int gst_loop(gst_app_t *app)
+static int gst_loop(gst_app_t *app, QApplication *qapp)
 {
+	int ret;
 	GstStateChangeReturn state_ret;
 
 	state_ret = gst_element_set_state((GstElement*)app->pipeline, GST_STATE_PLAYING);
 	g_warning("set state returned %d\n", state_ret);
 
-	app->loop = g_main_loop_new(NULL, FALSE);
-
-	g_main_loop_run(app->loop);
+	ret = qapp->exec();
 
 	state_ret = gst_element_set_state((GstElement*)app->pipeline, GST_STATE_NULL);
 	g_warning("set state null returned %d\n", state_ret);
 
-	return 0;
+	gst_object_unref(app->pipeline);
+
+	return ret;
 }
+
+class HuMainWindow: public QMainWindow
+{
+	public:
+	HuMainWindow()
+	{};
+	~ HuMainWindow(){};
+
+	void mouseReleaseEvent ( QMouseEvent * event )
+	{
+		if(event->button() == Qt::LeftButton) {
+			printf("\n***\n");
+			printf("YOU CLICKED MOUSE AT X:%d, Y:%d\n", event->x(), event->y());
+			printf("***\n");
+		}
+	};
+};
 
 int main (int argc, char *argv[])
 {
@@ -229,12 +252,24 @@ int main (int argc, char *argv[])
 	byte ep_in_addr  = -1;
 	byte ep_out_addr = -1;
 
+	/* Init Qt window */
+	QApplication qapp(argc, argv);
+	qapp.connect(&qapp, SIGNAL(lastWindowClosed()), &qapp, SLOT(quit ()));
+
+	HuMainWindow *window = new HuMainWindow();
+	window->resize(800, 480);
+	window->show();
+
 	/* Init gstreamer pipelien */
 	ret = gst_pipeline_init(app);
 	if (ret < 0) {
 		printf("gst_pipeline_init() ret: %d\n", ret);
 		return (ret);
 	}
+
+	/* Overlay gst sink on the Qt window */
+	WId xwinid = window->winId();
+	gst_video_overlay_set_window_handle(GST_VIDEO_OVERLAY(app->sink), xwinid);
 
 	/* Start AA processing */
 	ret = hu_aap_start (ep_in_addr, ep_out_addr);
@@ -244,11 +279,14 @@ int main (int argc, char *argv[])
 	}
 
 	/* Start gstreamer pipeline and main loop */
-	ret = gst_loop(app);
+	ret = gst_loop(app, &qapp);
 	if (ret < 0) {
 		printf("gst_loop() ret: %d\n", ret);
 		return (ret);
 	}
+
+	/* Shut down window */
+	window->hide();
 
 	/* Stop AA processing */
 	ret = hu_aap_stop ();
