@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <gst/gst.h>
 #include <gst/app/gstappsrc.h>
-#define LOGTAG "hu_mai"
 #include "hu_uti.h"
 #include "hu_aap.h"
 
@@ -25,29 +24,24 @@ static gboolean read_data(gst_app_t *app)
 	guint8 *ptr;
 	GstFlowReturn ret;
 	int iret;
+	char *vbuf;
+	int res_len = 0;
 
 	iret = hu_aap_recv_process ();                                    // Process 1 message
 	if (iret != 0) {
-		loge("hu_aap_recv_process() iret: %d", iret);
+		printf("hu_aap_recv_process() iret: %d\n", iret);
 		return FALSE;
 	}
-	logd("hu_aap_recv_process() ret: %d", iret);
 
-	/* Is there a buffer queued? */
-	int res_len = 0;
-	byte * dq_buf = read_head_buffer_get (& res_len);
-	if (dq_buf != NULL) {
-		logd("dq_buf: %p  res_len: %d", dq_buf, res_len);
+	/* Is there a video buffer queued? */
+	vbuf = read_head_buffer_get (& res_len);
+	if (vbuf != NULL) {
+		printf("vbuf: %p  res_len: %d\n", vbuf, res_len);
 
 		ptr= g_malloc(res_len);
 		g_assert(ptr);
-		memcpy(ptr, dq_buf, res_len);
+		memcpy(ptr, vbuf, res_len);
 
-		{
-			int i;
-			for (i=0; i<6; i++)
-				printf("buf[%d]: %08x\n", i, *((int *)ptr + i));
-		}
 		buffer = gst_buffer_new_wrapped(ptr, res_len);
 
 		ret = gst_app_src_push_buffer(app->src, buffer);
@@ -71,7 +65,6 @@ static gboolean read_data(gst_app_t *app)
 
 static void start_feed (GstElement * pipeline, guint size, gst_app_t *app)
 {
-	printf("app->sourceid = %d\n", app->sourceid);
 	if (app->sourceid == 0) {
 		GST_DEBUG ("start feeding");
 		app->sourceid = g_idle_add ((GSourceFunc) read_data, app);
@@ -239,28 +232,28 @@ int main (int argc, char *argv[])
 	/* Init gstreamer pipelien */
 	ret = gst_pipeline_init(app);
 	if (ret < 0) {
-		loge("gst_pipeline_init() ret: %d", ret);
+		printf("gst_pipeline_init() ret: %d\n", ret);
 		return (ret);
 	}
 
 	/* Start AA processing */
 	ret = hu_aap_start (ep_in_addr, ep_out_addr);
 	if (ret < 0) {
-		loge("hu_app_start() ret: %d", ret);
+		printf("hu_app_start() ret: %d\n", ret);
 		return (ret);
 	}
 
 	/* Start gstreamer pipeline and main loop */
 	ret = gst_loop(app);
 	if (ret < 0) {
-		loge("gst_loop() ret: %d", ret);
+		printf("gst_loop() ret: %d\n", ret);
 		return (ret);
 	}
 
 	/* Stop AA processing */
 	ret = hu_aap_stop ();
 	if (ret < 0) {
-		loge("hu_aap_stop() ret: %d", ret);
+		printf("hu_aap_stop() ret: %d\n", ret);
 		return (ret);
 	}
 
