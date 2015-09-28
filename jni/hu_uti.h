@@ -90,7 +90,13 @@
   unsigned long ms_sleep        (unsigned long ms);
   void hex_dump                 (char * prefix, int width, unsigned char * buf, int len);
   char * write_tail_buffer_get  (int len);
-  char * read_head_buffer_get   (int * len);
+#if defined (__cplusplus)
+  extern "C" {
+#endif
+  extern char * read_head_buffer_get   (int * len);
+#if defined (__cplusplus)
+  }
+#endif
 
   #ifndef __ANDROID_API__
     #define strlcpy   strncpy
