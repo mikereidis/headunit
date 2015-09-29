@@ -4,7 +4,6 @@
 #include <gst/app/gstappsrc.h>
 #include <gst/video/videooverlay.h>
 #include <QApplication>
-//#include <QWidget>
 #include <QMainWindow>
 #include <QMouseEvent>
 
@@ -227,6 +226,122 @@ static int gst_loop(gst_app_t *app, QApplication *qapp)
 	return ret;
 }
 
+static int aa_cmd_send(int cmd_len, unsigned char *cmd_buf, int res_max, unsigned char *res_buf)
+{
+	int chan = cmd_buf[0];
+	int res_len = 0;
+	int ret = 0;
+	char *dq_buf;
+
+	res_buf = (unsigned char *)malloc(res_max);
+	if (!res_buf) {
+		printf("TOTAL FAIL\n");
+		return -1;
+	}
+
+	printf("chan: %d cmd_len: %d\n", chan, cmd_len);
+	ret = hu_aap_enc_send (chan, cmd_buf+4, cmd_len - 4);
+	if (ret < 0) {
+		printf("aa_cmd_send(): hu_aap_enc_send() failed with (%d)\n", ret);
+		return ret;
+	}
+
+	dq_buf = read_head_buffer_get(&res_len);
+	if (!dq_buf || res_len <= 0) {
+		printf("No data dq_buf!\n");
+		return 0;
+	}
+	memcpy(res_buf, dq_buf, res_len);
+	/* FIXME - we do nothing with this crap, probably check for ack and move along */
+
+	free(res_buf);
+
+        return res_len;
+}
+
+static int varint_encode_long (long val, unsigned char *ba, int idx)
+{
+	if (val >= 0x7fffffffffffffffL) {
+		printf("Too big");
+		return 1;
+	}
+	long left = val;
+	for (int idx2 = 0; idx2 < 9; idx2 ++) {
+		ba[idx+idx2] = (char)(0x7f & left);
+		left = left >> 7;
+		if (left == 0) {
+			return idx2 + 1;
+		}
+		else if (idx2 < 9 - 1) {
+			ba [idx+idx2] |= 0x80;
+		}
+	}
+	return 9;
+}
+
+static int varint_encode_int(int val, unsigned char *ba, int idx)
+{
+	if (val >= 1 << 14) {
+		printf("Too big");
+		return 1;
+	}
+	ba [idx+0] = (char)(0x7f & (val >> 0));
+	ba [idx+1] = (char)(0x7f & (val >> 7));
+	if (ba [idx+1] != 0) {
+		ba [idx+0] |= 0x80;
+		return 2;
+	}
+	return 1;
+}
+
+#define ACTION_DOWN	0
+#define ACTION_UP	1
+#define ACTION_MOVE	2
+
+static void aa_touch (byte action, int x, int y) {
+	struct timespec tp;
+
+	//0   1 - 9                                           10                          X:     15, 16    Y:     18, 19                                        25
+	unsigned char ba[] = {0x02, 0x0b, 0x03, 0x00, -128, 0x01,   0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0,    0x1a, 0x0e,   0x0a, 0x08,   0x08, 0x2e, 0,   0x10, 0x2b, 0,   0x18, 0x00,   0x10, 0x00,   0x18, 0x00};
+
+	int siz_arr = 0;
+
+	clock_gettime(CLOCK_REALTIME, &tp);
+
+	int idx = 1+6 + varint_encode_long(tp.tv_nsec, ba, 1+6);
+
+	ba[idx++] = 0x1a;
+	int size1_idx = idx;
+	ba[idx++] = 0x0a;
+
+	ba[idx++] = 0x0a;
+	int size2_idx = idx;
+	ba[idx ++] = 0x04;
+
+	ba[idx ++] = 0x08;
+	siz_arr = varint_encode_int(x, ba, idx);
+	idx += siz_arr;
+	ba[size1_idx] += siz_arr;
+	ba[size2_idx] += siz_arr;
+
+	ba[idx ++] = 0x10;
+	siz_arr = varint_encode_int(y, ba, idx);
+	idx += siz_arr;
+	ba[size1_idx] += siz_arr;
+	ba[size2_idx] += siz_arr;
+
+	ba[idx++] = 0x18;
+	ba[idx++] = 0x00;
+
+	ba[idx++] = 0x10;
+	ba[idx++] = 0x00;
+
+	ba[idx++] = 0x18;
+	ba[idx++] = action;
+
+	aa_cmd_send (idx, ba, 0, NULL);
+}
+
 class HuMainWindow: public QMainWindow
 {
 	public:
@@ -234,12 +349,34 @@ class HuMainWindow: public QMainWindow
 	{};
 	~ HuMainWindow(){};
 
+	void mousePressEvent ( QMouseEvent * event )
+	{
+		if(event->button() == Qt::LeftButton) {
+			printf("\n***\n");
+			printf("PRESSED MOUSE BUTTON AT X:%d, Y:%d\n", event->x(), event->y());
+			printf("***\n");
+			aa_touch(ACTION_DOWN, event->x(), event->y());
+		}
+	};
+
 	void mouseReleaseEvent ( QMouseEvent * event )
 	{
 		if(event->button() == Qt::LeftButton) {
 			printf("\n***\n");
-			printf("YOU CLICKED MOUSE AT X:%d, Y:%d\n", event->x(), event->y());
+			printf("RELEASED MOUSE BUTTON AT X:%d, Y:%d\n", event->x(), event->y());
 			printf("***\n");
+			aa_touch(ACTION_UP, event->x(), event->y());
+		}
+	};
+
+	void mouseMoveEvent ( QMouseEvent * event )
+	{
+		/* Was left button held down when the move event occurred? */
+		if(event->buttons() == Qt::LeftButton) {
+			printf("\n***\n");
+			printf("MOVED MOUSE TO X:%d, Y:%d\n", event->x(), event->y());
+			printf("***\n");
+			aa_touch(ACTION_MOVE, event->x(), event->y());
 		}
 	};
 };
