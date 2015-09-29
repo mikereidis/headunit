@@ -7,7 +7,6 @@
 #include <QMainWindow>
 #include <QMouseEvent>
 
-
 #include "hu_uti.h"
 #include "hu_aap.h"
 
@@ -38,7 +37,7 @@ static gboolean read_data(gst_app_t *app)
 	}
 
 	/* Is there a video buffer queued? */
-	vbuf = read_head_buffer_get (& res_len);
+	vbuf = read_head_buffer_get (&res_len);
 	if (vbuf != NULL) {
 		printf("vbuf: %p  res_len: %d\n", vbuf, res_len);
 
@@ -54,14 +53,6 @@ static gboolean read_data(gst_app_t *app)
 			g_debug("push buffer returned %d for %d bytes \n", ret, res_len);
 			return FALSE;
 		}
-
-#if 0
-		if(size != BUFF_SIZE){
-			ret = gst_app_src_end_of_stream(app->src);
-			g_debug("eos returned %d at %d\n", ret, __LINE__);
-			return FALSE;
-		}
-#endif
 	}
 
 	return TRUE;
