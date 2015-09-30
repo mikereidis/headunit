@@ -234,12 +234,14 @@ static int aa_cmd_send(int cmd_len, unsigned char *cmd_buf, int res_max, unsigne
 	ret = hu_aap_enc_send (chan, cmd_buf+4, cmd_len - 4);
 	if (ret < 0) {
 		printf("aa_cmd_send(): hu_aap_enc_send() failed with (%d)\n", ret);
+		free(res_buf);
 		return ret;
 	}
 
 	dq_buf = read_head_buffer_get(&res_len);
 	if (!dq_buf || res_len <= 0) {
 		printf("No data dq_buf!\n");
+		free(res_buf);
 		return 0;
 	}
 	memcpy(res_buf, dq_buf, res_len);
@@ -269,12 +271,12 @@ static size_t uleb128_encode(uint64_t value, uint8_t *data)
 #define ACTION_DOWN	0
 #define ACTION_UP	1
 #define ACTION_MOVE	2
-#define TS_REQ_SIZE	32
-#define TS_DATA_OFFSET	7
+#define TS_MAX_REQ_SZ	32
 static const uint8_t ts_header[] ={0x02, 0x0b, 0x03, 0x00, 0x80, 0x01, 0x08};
 static const uint8_t ts_sizes[] = {0x1a, 0x09, 0x0a, 0x03};
+static const uint8_t ts_footer[] = {0x10, 0x00, 0x18};
 
-static void aa_touch (byte action, int x, int y) {
+static void aa_touch_event(uint8_t action, int x, int y) {
 	struct timespec tp;
 	uint8_t *buf;
 	int idx;
@@ -283,45 +285,44 @@ static void aa_touch (byte action, int x, int y) {
 	int axis = 0;
 	int coordinates[3] = {x, y, 0};
 
-	buf = (uint8_t *)malloc(32);
+	buf = (uint8_t *)malloc(TS_MAX_REQ_SZ);
 	if(!buf) {
-		printf("DOOMED!!!\n");
+		printf("Failed to allocate touchscreen event buffer\n");
 		return;
 	}
 
+	/* Fetch the time stamp */
 	clock_gettime(CLOCK_REALTIME, &tp);
 
+	/* Copy header */
 	memcpy(buf, ts_header, sizeof(ts_header));
 	idx = sizeof(ts_header) +
 	      uleb128_encode(tp.tv_nsec, buf + sizeof(ts_header));
-	/* Location of size1/size2 fields can be calculated based on
-	 * the above idx value
-	 */
-	buf[idx++] = 0x1a;	/* Some kind of flag? */
-	size1_idx = idx;
-	buf[idx++] = 0x09;	/* size1 defaults to 0x0a, now 0x09 */
-	buf[idx++] = 0x0a;	/* Some kind of flag? */
-	size2_idx = idx;
-	buf[idx++] = 0x03;	/* size2 default to 0x04, now 0x03 */
+	size1_idx = idx + 1;
+	size2_idx = idx + 3;
 
-	/* Then loop to set three axes */
+	/* Copy sizes */
+	memcpy(buf+idx, ts_sizes, sizeof(ts_sizes));
+	idx += sizeof(ts_sizes);
+
+	/* Set magnitude of each axis */
 	for (i=0; i<3; i++) {
 		axis += 0x08;
 		buf[idx++] = axis;
+		/* FIXME The following can be optimzed to update size1/2 at end of loop */
 		siz_arr = uleb128_encode(coordinates[i], &buf[idx]);
 		idx += siz_arr;
 		buf[size1_idx] += siz_arr;
 		buf[size2_idx] += siz_arr;
 	}
 
-	/* This stuff could be copied in, postamble? */
-	buf[idx++] = 0x10;
-	buf[idx++] = 0x00;
-	buf[idx++] = 0x18;
+	/* Copy footer */
+	memcpy(buf+idx, ts_footer, sizeof(ts_footer));
+	idx += sizeof(ts_footer);
 
-	/* Then fill in action */
 	buf[idx++] = action;
 
+	/* Send touch event */
 	aa_cmd_send (idx, buf, 0, NULL);
 
 	free(buf);
@@ -340,7 +341,7 @@ class HuMainWindow: public QMainWindow
 			printf("\n***\n");
 			printf("PRESSED MOUSE BUTTON AT X:%d, Y:%d\n", event->x(), event->y());
 			printf("***\n");
-			aa_touch(ACTION_DOWN, event->x(), event->y());
+			aa_touch_event(ACTION_DOWN, event->x(), event->y());
 		}
 	};
 
@@ -350,7 +351,7 @@ class HuMainWindow: public QMainWindow
 			printf("\n***\n");
 			printf("RELEASED MOUSE BUTTON AT X:%d, Y:%d\n", event->x(), event->y());
 			printf("***\n");
-			aa_touch(ACTION_UP, event->x(), event->y());
+			aa_touch_event(ACTION_UP, event->x(), event->y());
 		}
 	};
 
@@ -361,7 +362,7 @@ class HuMainWindow: public QMainWindow
 			printf("\n***\n");
 			printf("MOVED MOUSE TO X:%d, Y:%d\n", event->x(), event->y());
 			printf("***\n");
-			aa_touch(ACTION_MOVE, event->x(), event->y());
+			aa_touch_event(ACTION_MOVE, event->x(), event->y());
 		}
 	};
 };
