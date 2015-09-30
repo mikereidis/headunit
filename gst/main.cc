@@ -250,39 +250,20 @@ static int aa_cmd_send(int cmd_len, unsigned char *cmd_buf, int res_max, unsigne
         return res_len;
 }
 
-static int varint_encode_long (long val, unsigned char *ba, int idx)
+static size_t uleb128_encode(uint64_t value, uint8_t *data)
 {
-	if (val >= 0x7fffffffffffffffL) {
-		printf("Too big");
-		return 1;
-	}
-	long left = val;
-	for (int idx2 = 0; idx2 < 9; idx2 ++) {
-		ba[idx+idx2] = (char)(0x7f & left);
-		left = left >> 7;
-		if (left == 0) {
-			return idx2 + 1;
-		}
-		else if (idx2 < 9 - 1) {
-			ba [idx+idx2] |= 0x80;
-		}
-	}
-	return 9;
-}
+	uint8_t cbyte;
+	size_t enc_size = 0;
 
-static int varint_encode_int(int val, unsigned char *ba, int idx)
-{
-	if (val >= 1 << 14) {
-		printf("Too big");
-		return 1;
-	}
-	ba [idx+0] = (char)(0x7f & (val >> 0));
-	ba [idx+1] = (char)(0x7f & (val >> 7));
-	if (ba [idx+1] != 0) {
-		ba [idx+0] |= 0x80;
-		return 2;
-	}
-	return 1;
+	do {
+		cbyte = value & 0x7f;
+		value >>= 7;
+		if (value != 0)
+			cbyte |= 0x80;
+		data[enc_size++] = cbyte;
+	} while (value != 0);
+
+	return enc_size;
 }
 
 #define ACTION_DOWN	0
@@ -299,7 +280,7 @@ static void aa_touch (byte action, int x, int y) {
 
 	clock_gettime(CLOCK_REALTIME, &tp);
 
-	int idx = 1+6 + varint_encode_long(tp.tv_nsec, ba, 1+6);
+	int idx = 1+6 + uleb128_encode(tp.tv_nsec, &ba[1+6]);
 
 	ba[idx++] = 0x1a;
 	int size1_idx = idx;
@@ -310,19 +291,21 @@ static void aa_touch (byte action, int x, int y) {
 	ba[idx ++] = 0x04;
 
 	ba[idx ++] = 0x08;
-	siz_arr = varint_encode_int(x, ba, idx);
+	siz_arr = uleb128_encode(x, &ba[idx]);
 	idx += siz_arr;
 	ba[size1_idx] += siz_arr;
 	ba[size2_idx] += siz_arr;
 
 	ba[idx ++] = 0x10;
-	siz_arr = varint_encode_int(y, ba, idx);
+	siz_arr = uleb128_encode(y, &ba[idx]);
 	idx += siz_arr;
 	ba[size1_idx] += siz_arr;
 	ba[size2_idx] += siz_arr;
 
-	ba[idx++] = 0x18;
-	ba[idx++] = 0x00;
+	/* So this is Z, it would be nice to handle it similarly and make a loop */
+	ba[idx++] = 0x18;	// Z axis flag
+	ba[idx++] = 0x00;	// Z magnitude is zero and those sizes are already figuring on this fixed size of
+				// the Z coordinate array
 
 	ba[idx++] = 0x10;
 	ba[idx++] = 0x00;
