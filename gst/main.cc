@@ -269,51 +269,62 @@ static size_t uleb128_encode(uint64_t value, uint8_t *data)
 #define ACTION_DOWN	0
 #define ACTION_UP	1
 #define ACTION_MOVE	2
+#define TS_REQ_SIZE	32
+#define TS_DATA_OFFSET	7
+static const uint8_t ts_header[] ={0x02, 0x0b, 0x03, 0x00, 0x80, 0x01, 0x08};
+static const uint8_t ts_sizes[] = {0x1a, 0x09, 0x0a, 0x03};
 
 static void aa_touch (byte action, int x, int y) {
 	struct timespec tp;
-
-	//0   1 - 9                                           10                          X:     15, 16    Y:     18, 19                                        25
-	unsigned char ba[] = {0x02, 0x0b, 0x03, 0x00, -128, 0x01,   0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0,    0x1a, 0x0e,   0x0a, 0x08,   0x08, 0x2e, 0,   0x10, 0x2b, 0,   0x18, 0x00,   0x10, 0x00,   0x18, 0x00};
-
+	uint8_t *buf;
+	int idx;
 	int siz_arr = 0;
+	int size1_idx, size2_idx, i;
+	int axis = 0;
+	int coordinates[3] = {x, y, 0};
+
+	buf = (uint8_t *)malloc(32);
+	if(!buf) {
+		printf("DOOMED!!!\n");
+		return;
+	}
 
 	clock_gettime(CLOCK_REALTIME, &tp);
 
-	int idx = 1+6 + uleb128_encode(tp.tv_nsec, &ba[1+6]);
+	memcpy(buf, ts_header, sizeof(ts_header));
+	idx = sizeof(ts_header) +
+	      uleb128_encode(tp.tv_nsec, buf + sizeof(ts_header));
+	/* Location of size1/size2 fields can be calculated based on
+	 * the above idx value
+	 */
+	buf[idx++] = 0x1a;	/* Some kind of flag? */
+	size1_idx = idx;
+	buf[idx++] = 0x09;	/* size1 defaults to 0x0a, now 0x09 */
+	buf[idx++] = 0x0a;	/* Some kind of flag? */
+	size2_idx = idx;
+	buf[idx++] = 0x03;	/* size2 default to 0x04, now 0x03 */
 
-	ba[idx++] = 0x1a;
-	int size1_idx = idx;
-	ba[idx++] = 0x0a;
+	/* Then loop to set three axes */
+	for (i=0; i<3; i++) {
+		axis += 0x08;
+		buf[idx++] = axis;
+		siz_arr = uleb128_encode(coordinates[i], &buf[idx]);
+		idx += siz_arr;
+		buf[size1_idx] += siz_arr;
+		buf[size2_idx] += siz_arr;
+	}
 
-	ba[idx++] = 0x0a;
-	int size2_idx = idx;
-	ba[idx ++] = 0x04;
+	/* This stuff could be copied in, postamble? */
+	buf[idx++] = 0x10;
+	buf[idx++] = 0x00;
+	buf[idx++] = 0x18;
 
-	ba[idx ++] = 0x08;
-	siz_arr = uleb128_encode(x, &ba[idx]);
-	idx += siz_arr;
-	ba[size1_idx] += siz_arr;
-	ba[size2_idx] += siz_arr;
+	/* Then fill in action */
+	buf[idx++] = action;
 
-	ba[idx ++] = 0x10;
-	siz_arr = uleb128_encode(y, &ba[idx]);
-	idx += siz_arr;
-	ba[size1_idx] += siz_arr;
-	ba[size2_idx] += siz_arr;
+	aa_cmd_send (idx, buf, 0, NULL);
 
-	/* So this is Z, it would be nice to handle it similarly and make a loop */
-	ba[idx++] = 0x18;	// Z axis flag
-	ba[idx++] = 0x00;	// Z magnitude is zero and those sizes are already figuring on this fixed size of
-				// the Z coordinate array
-
-	ba[idx++] = 0x10;
-	ba[idx++] = 0x00;
-
-	ba[idx++] = 0x18;
-	ba[idx++] = action;
-
-	aa_cmd_send (idx, ba, 0, NULL);
+	free(buf);
 }
 
 class HuMainWindow: public QMainWindow
