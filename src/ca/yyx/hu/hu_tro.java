@@ -148,9 +148,9 @@ public class hu_tro {
 
 
 // 1 External API used:
-  private void video_decode (ByteBuffer content) {                      // Decode H264 video in client
+  private void media_decode (ByteBuffer content) {                      // Decode audio or H264 video in client
     if (m_hu_act != null)
-      m_hu_act.video_decode (content);                                 // Call callback
+      m_hu_act.media_decode (content);                                  // Call callback
   }
 
 // 5 External APIs provided:
@@ -367,7 +367,7 @@ public class hu_tro {
           }
           else if (flag == 11 && (msg_type == 0 || msg_type == 1) && (baa [14] == 0 && baa [15] == 0 && baa [16] == 0 && baa [17] == 1)) {  // If Not fragmented Video
             buffer.position (14);
-            video_decode (buffer);                                      // Decode H264 video in client
+            media_decode (buffer);                                      // Decode H264 video in client
           }
           else if (flag == 9 && (msg_type == 0 || msg_type == 1) && (baa [18] == 0 && baa [19] == 0 && baa [20] == 0 && baa [21] == 1)) {   // If First fragment Video
             System.arraycopy (baa, 18, assy, 0, size - 18 + 4); // !!!! ???? Why + 4 ?. because size in bytes 2,3 doesn't include 4 bytes size at 4,5,6,7
@@ -375,7 +375,7 @@ public class hu_tro {
           }
           else if (flag == 11 && msg_type == 1 && (baa [6] == 0 && baa [7] == 0 && baa [8] == 0 && baa [9] == 1)) {                         // If Not fragmented First video config packet
             buffer.position (6);
-            video_decode (buffer);                                      // Decode H264 video in client
+            media_decode (buffer);                                      // Decode H264 video in client
           }
           else if (flag == 8) {                                                                                                             // If Middle fragment Video
             System.arraycopy (baa, 4, assy, assy_size, size - 4);
@@ -391,7 +391,7 @@ public class hu_tro {
             bb_assyf.limit (assy_size);
             bb_assyf.position (0);
 
-            video_decode (bb_assyf);                                    // Decode H264 video in client
+            media_decode (bb_assyf);                                    // Decode H264 video in client
           }
           else
             hu_uti.loge ("Video error");
@@ -503,7 +503,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
 
                                       0x1A, 4+11, // Sink: Video
                                                   0x08, 3,    // int (codec type)
-                                                  //0x10, 1,    // int (audio stream type)
+                                                  //0x10, 1,    // int (audio stream type) (1-4)
 //                                                  0x1a, 8,    // f        //I44100 = 0xAC44 = 10    10 1  100 0   100 0100  :  -60, -40, 2
                                                                             // 48000 = 0xBB80 = 10    111 0111   000 0000     :  -128, -9, 2
                                                                             // 16000 = 0x3E80 = 11 1110 1   000 0000          :  -128, -6
@@ -598,7 +598,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
         }
 
 
-        else if (msg_type == 32768) {                                    // If Video/Media Setup Request...
+        else if (msg_type == 32768) {                                    // If Media Setup Request...
           // 04-22 01:13:35.384 D/hu_act (18103): handleMessage chan: 1  flag: 11  msg_type: 32768  size: 8  position: 0
           // 04-22 01:13:35.384 D/hu_act (18103): handleMessage 00000000: 01 0B 00 04 80 00 08 03             // Int:3 = MediaType Video
 
@@ -978,12 +978,12 @@ length = 6;//65536;//header_size; // For next time
       hu_uti.logd ("oap_proto_ver: " + oap_proto_ver);
 
       // Send identifying strings.
-      usb_oap_string_send (connection, OAP_STR_MANUFACTURER,hu_uti.str_MANUFACTURER);
-      usb_oap_string_send (connection, OAP_STR_MODEL,       hu_uti.str_MODEL);
-      usb_oap_string_send (connection, OAP_STR_DESCRIPTION, hu_uti.str_DESCRIPTION);
-      usb_oap_string_send (connection, OAP_STR_VERSION,     hu_uti.str_VERSION);
+      usb_oap_string_send (connection, OAP_STR_MANUFACTURER,hu_uti.str_MAN);
+      usb_oap_string_send (connection, OAP_STR_MODEL,       hu_uti.str_MOD);
+      usb_oap_string_send (connection, OAP_STR_DESCRIPTION, hu_uti.str_DES);
+      usb_oap_string_send (connection, OAP_STR_VERSION,     hu_uti.str_VER);
       usb_oap_string_send (connection, OAP_STR_URI,         hu_uti.str_URI);
-      usb_oap_string_send (connection, OAP_STR_SERIAL,      hu_uti.str_SERIAL);
+      usb_oap_string_send (connection, OAP_STR_SERIAL,      hu_uti.str_SER);
 
       // Send start. The device should re-enumerate as an accessory.
       hu_uti.logd ("Sending accessory start request.");

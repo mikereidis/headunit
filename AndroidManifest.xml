@@ -2,17 +2,20 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="ca.yyx.hu"
-  android:versionCode="9"
-  android:versionName="2015_06_26" >
+  android:versionCode="22"
+  android:versionName="2015_11_28" >
 
   <uses-feature android:name="android.hardware.usb.host"          android:required="false"/>
   <uses-feature android:name="android.hardware.screen.landscape"  android:required="false"/>
   <uses-feature android:name="android.hardware.wifi"              android:required="false"/>
 
-  <uses-sdk android:minSdkVersion="16" />
-
+  <uses-sdk
+    android:minSdkVersion="16"
+  />
 
 <!-- 
+  android:minSdkVersion="16"
+  android:targetSdkVersion="23"
     <supports-screens android:smallScreens="false"
                       android:normalScreens="false"
                       android:largeScreens="true"
@@ -22,11 +25,13 @@
 
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"></uses-permission>
-<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"></uses-permission>
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-permission android:name="android.permission.ACCESS_SUPERUSER"/>
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.BROADCAST_STICKY"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>
@@ -54,14 +59,17 @@
       android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 android:screenOrientation="landscape"
 android:screenOrientation="portrait"
+
+      android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 -->
     <activity android:name=".hu_act"
       android:label="Headunit"
       android:launchMode="singleInstance"
 
-android:screenOrientation="landscape"
+      android:screenOrientation="sensorLandscape"
+      android:hardwareAccelerated="true"
 
-      android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+android:theme="@style/AppTheme" 
       >
       <intent-filter>
         <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
@@ -70,6 +78,14 @@ android:screenOrientation="landscape"
 -->
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
+
+
+<!-- 
+    <category android:name="android.intent.category.CAR_MODE" />
+    <category android:name="android.intent.category.CAR_DOCK" />
+    <category android:name="android.intent.category.DEFAULT" />
+-->
+
       </intent-filter>
 
       <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"

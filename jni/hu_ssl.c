@@ -58,30 +58,41 @@
       loge ("ret: %d  ssl_err: %d (%s)", ret, ssl_err, err_str);
   }
 
+#define HU_USB_ERROR
+//#ifdef __i386__
+//#ifdef __arm__
+
   int hu_ssl_handshake () {
 
     int                 ret;
     BIO               * cert_bio = NULL;
     BIO               * pkey_bio = NULL;
-
+#ifdef HU_USB_ERROR
     SSL_load_error_strings ();                                          // Before or after init ?
     ERR_load_BIO_strings ();
     ERR_load_crypto_strings ();
+  #ifdef __arm__
     ERR_load_SSL_strings ();
-
+  #endif
+#endif
     ret = SSL_library_init ();                                          // Init
     logd ("SSL_library_init ret: %d", ret);
     if (ret != 1) {                                                     // Always returns "1", so it is safe to discard the return value.
       loge ("SSL_library_init() error");
       return (-1);
     }
-
+#ifdef HU_USB_ERROR
     SSL_load_error_strings ();                                          // Before or after init ?
     ERR_load_BIO_strings ();
     ERR_load_crypto_strings ();
+  #ifdef __arm__
     ERR_load_SSL_strings ();
+  #endif
+#endif
 
+  #ifdef __arm__
     OPENSSL_add_all_algorithms_noconf ();                               // Add all algorithms, without using config file
+  #endif
 
     ret = RAND_status ();                                               // 1 if the PRNG has been seeded with enough data, 0 otherwise.
     logd ("RAND_status ret: %d", ret);
@@ -253,13 +264,13 @@ BIO_set_write_buf_size (hu_ssl_wm_bio, DEFBUF);
       }
       logd ("BIO_read() HS client req ret: %d", ret);
       int len = ret + 6;
-      ret = hu_aap_usb_set (0, 3, 3, hs_buf, len);                     // chan:0   flags:first+last    msg_type:SSL
-      ret = hu_aap_usb_send (hs_buf, len, 1000);                       // Send Client request to AA Server
+      ret = hu_aap_tra_set (AA_CH_CTR, 3, 3, hs_buf, len);              // chan:0/AA_CH_CTR   flags:first+last    msg_type:SSL
+      ret = hu_aap_tra_send (hs_buf, len, 2000);                       // Send Client request to AA Server
       if (ret <= 0 || ret != len) {
-        loge ("hu_aap_usb_send() HS client req ret: %d  len: %d", ret, len);
+        loge ("hu_aap_tra_send() HS client req ret: %d  len: %d", ret, len);
       }      
 
-      ret = hu_aap_usb_recv (hs_buf, sizeof (hs_buf), 1000);           // Get Rx packet from USB: Receive Server response: Hello/Change Cipher
+      ret = hu_aap_tra_recv (hs_buf, sizeof (hs_buf), 2000);           // Get Rx packet from Transport: Receive Server response: Hello/Change Cipher
       if (ret <= 0) {                                                   // If error, then done w/ error
         loge ("HS server rsp ret: %d", ret);
         return (-1);

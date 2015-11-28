@@ -34,7 +34,7 @@
 
   GS3:
 
-  cat /sys/kernel/debug/usb/usbmon/0u > /sdcard/0u &
+  cat /sys/kernel/debug/usb/usbmon/0u > /sdcard/aa0u &
 
 
 
@@ -265,7 +265,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
   int jbytebu_max_dumps = 64;//256;//1024;
   int max_dump_jbytebu_hs = 16384;//4096;//64;  // max bytes to dump
 
-  int logd_jbytebu (JNIEnv * env, char * prefix, jobject java_bytebu, jint idx, jint len, int type) {
+  int logd_jbytebu (JNIEnv * env, char * prefix, jobject java_bytebu, jint idx, jint len, unsigned char * src) {
     if (jbytebu_num_dumps ++ >= jbytebu_max_dumps) {
       if (! file_get ("/sdcard/aanomax"))
         return (0);
@@ -273,13 +273,13 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
     unsigned char * buf = (unsigned char *) (*env)->GetDirectBufferAddress (env, java_bytebu);// ByteBuffer must be created using an allocateDirect() factory method
 
     if (jbytebu_num_dumps > 64 && ! file_get ("/sdcard/aaall")) {
-      if (type == 2 && buf [0] == 0x00 && (buf [1] == 0 || buf [1] == 1)) // Tx Video
+      if (* src == 'A' && buf [0] == 0x00 && (buf [1] == 0 || buf [1] == 1)) // Tx Video
         return (0);
-      if (type == 1 && buf [0] == 0x80 && buf [1] == 0x04)                // Rx Video Ack
+      if (* src == 'H' && buf [0] == 0x80 && buf [1] == 0x04)                // Rx Video Ack
         return (0);
-      if (type == 1 && buf [0] == 0x00 && buf [1] == 0x0b)                // Rx Ping request
+      if (* src == 'H' && buf [0] == 0x00 && buf [1] == 0x0b)                // Rx Ping request
         return (0);
-      if (type == 2 && buf [0] == 0x00 && buf [1] == 0x0c)                // Tx Ping response
+      if (* src == 'A' && buf [0] == 0x00 && buf [1] == 0x0c)                // Tx Ping response
         return (0);
     }
 
@@ -288,8 +288,8 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
     if (buf == NULL || len <= 0)
       return (0);
 
-    if (type == 1 || type == 2)                                         // If Rx or Tx...
-      hu_aad_dmp (prefix, type, & buf [idx], len);
+    if (* src == 'H' || * src == 'A')                                         // If Rx or Tx...
+      hu_aad_dmp (prefix, src, 0, 0, & buf [idx], len);
     else {
       int dumplen = len;
       if (len > max_dump_jbytebu_hs)
@@ -327,7 +327,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
   void Java_com_google_android_gms_car_senderprotocol_SslWrapper_nativeHandshakeDataEnqueue (JNIEnv * env, jobject thiz, jobject bBuf, jint idx, jint len) { // Pass handshake request
 
     if (en_dump_hs)
-      logd_jbytebu (env, "HE: ", bBuf, idx, len, 0);
+      logd_jbytebu (env, "HE: ", bBuf, idx, len, "AA");
     else
       logd ("HE bBuf: %p  idx: %d  len: %d", bBuf, idx, len);
 
@@ -369,7 +369,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
       loge ("NO %s", __func__);
 
     if (en_dump_hs)
-      logd_jbytebu (env, "HD: ", bBuf, 0, len, 0);
+      logd_jbytebu (env, "HD: ", bBuf, 0, len, "AA");
     else
       logd ("HD passed len: %d", len);
   }
@@ -436,7 +436,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
       last_decrypt_len = 0;
       memcpy (buf, decrypt_buf, len);
       if (en_dump_data)
-        logd_jbytebu (env, "rx: ", bBuf, 0, len, 1);
+        logd_jbytebu (env, "rx: ", bBuf, 0, len, "HU");
       if (ena_log_verbo)
         logd ("DD Rx decrypted len: %d  retlen: %d", len, retlen);
 
@@ -448,7 +448,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
     else
       loge ("NO %s", __func__);
     if (en_dump_data)
-      logd_jbytebu (env, "rx: ", bBuf, 0, retlen, 1);
+      logd_jbytebu (env, "rx: ", bBuf, 0, retlen, "AA");
     if (ena_log_verbo)
       logd ("DD Rx decrypted len: %d  retlen: %d", len, retlen);
     return (retlen);
@@ -459,9 +459,9 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
   jint Java_com_google_android_gms_car_senderprotocol_SslWrapper_nativeEncryptionPipelineEnqueue  (JNIEnv * env, jobject thiz, jobject bBuf, jint idx, jint len) { // Return len
     int retlen = -1;
     if (en_dump_data)
-      logd_jbytebu (env, "TX: ", bBuf, idx, len, 2);
+      logd_jbytebu (env, "TX: ", bBuf, idx, len, "AA");
     if (neuter) {
-      jbyte * encrypt_buf = write_tail_buffer_get (len);
+      jbyte * encrypt_buf = vid_write_tail_buf_get (len);
       if (ena_log_verbo)
         logd ("EE Tx encrypt_buf: %p", encrypt_buf);
       if (encrypt_buf == NULL) {
@@ -477,7 +477,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
       memcpy (encrypt_buf, & buf [idx], len);
       if (en_dump_data && ena_log_verbo)
         hex_dump ("TX: ", 16, encrypt_buf, len);
-        //logd_jbytebu (env, "Tx: ", bBuf, idx, len, 2);
+        //logd_jbytebu (env, "Tx: ", bBuf, idx, len, "AA");
       return (len);
     }
 
@@ -495,7 +495,7 @@ E:  Ad=04(O) Atr=02(Bulk) MxPS= 512 Ivl=0ms
       logd ("ED Tx passed len: %d", len);
     if (neuter) {
       int retlen = -1;
-      jbyte * encrypt_buf = read_head_buffer_get (& retlen);
+      jbyte * encrypt_buf = vid_read_head_buf_get (& retlen);
       if (ena_log_verbo)
         logd ("ED Tx encrypt_buf: %p", encrypt_buf);
       if (encrypt_buf == NULL) {

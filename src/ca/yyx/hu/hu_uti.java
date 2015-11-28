@@ -71,8 +71,8 @@ public final class hu_uti  {
 
     // Android Logging Levels:
   public  static final boolean ena_log_verbo = false;
-  private static final boolean ena_log_debug = true;
-  private static final boolean ena_log_warni = true;
+  private static final boolean ena_log_debug = true;//false;//true;
+  private static final boolean ena_log_warni = true;//false;//true;
   private static final boolean ena_log_error = true;
 
   private static String tag_prefix = "";
@@ -89,7 +89,7 @@ public final class hu_uti  {
     }
     catch (Throwable e) {
       //hu_uti.loge ("Throwable e: " + e);
-      Log.e ("hucomuti", "Throwable e: " + e);
+      Log.e ("hu_uti", "Throwable e: " + e);
       e.printStackTrace ();
       tag_prefix = "E!";
     }
@@ -116,7 +116,7 @@ public final class hu_uti  {
       full_txt = method + ": " + text;
     }
     else {
-      full_tag = String.format ("%24.24s", method);
+      full_tag = String.format ("%36.36s", method);
       full_txt = text;
     }
 
@@ -204,7 +204,7 @@ public final class hu_uti  {
   public static long ms_sleep (long ms) {
     //main_thread_get ("ms_sleep ms: " + ms);
 
-    //hu_uti.logw ("ms: " + ms);                                       // Warning
+    //hu_uti.logw ("ms: " + ms);                                          // Warning
 
     try {
       Thread.sleep (ms);                                                // Wait ms milliseconds
@@ -231,6 +231,26 @@ public final class hu_uti  {
     return (ms);
   }
 
+
+  public static byte [] hexstr_to_ba (String s) {
+    int len = s.length ();
+    byte [] data = new byte [len / 2];
+    for (int i = 0; i < len; i += 2)
+      data [i / 2] = (byte) ((Character.digit (s.charAt (i), 16) << 4) + Character.digit(s.charAt (i + 1), 16));
+    return (data);
+  }
+
+  public static String str_to_hexstr (String s) {
+    byte [] ba = str_to_ba (s);
+    return (ba_to_hexstr (ba));
+  }
+
+  public static String ba_to_hexstr (byte [] ba) {
+    String hex = "";
+    for (int ctr = 0; ctr < ba.length; ctr ++)
+      hex += hex_get (ba [ctr]);    //hex += "" + hex_get ((byte) (ba [ctr] >> 4));
+    return (hex.toString());
+  }
 
   public static String hex_get (byte b) {
     byte c1 = (byte)((b & 0x00F0) >> 4);
@@ -268,24 +288,24 @@ public final class hu_uti  {
     return (res);
   }
 
-  public static void hex_dump (String prefix, ByteBuffer content, int size) {
-    //int log_size = size + 100000;
-    byte [] ba = content.array ();
+  public static void hex_dump (String prefix, byte [] ba, int size) {
     int len = ba.length;
     String str = "";
     int idx = 0;
     for (idx = 0; idx < len && idx < size; idx ++) {
       str += hex_get (ba [idx]) + " ";
       if (idx % 16 == 15) {
-        //hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
         hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
         str = "";
       }
     }
     if (! str.equals ("")) {
-      //hu_uti.logd (prefix + " " + log_size + " " + hex_get ((idx / 16) * 16) + ": " + str);
       hu_uti.logd (prefix + " " + hex_get ((idx / 16) * 16) + ": " + str);
     }
+  }
+
+  public static void hex_dump (String prefix, ByteBuffer content, int size) {
+    hu_uti.hex_dump (prefix, content.array (), size);
   }
 
 /*
@@ -368,7 +388,7 @@ public final class hu_uti  {
 */
 
   public static int file_write (Context context, String filename, byte [] buf) {
-    try {
+    try {                                                               // File /data/data/ca.yyx.hu/hu.log contains a path separator
       FileOutputStream fos = context.openFileOutput (filename, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
                                                                         // Create/open file for writing
       fos.write (buf);                                                  // Copy to file
@@ -402,12 +422,12 @@ public final class hu_uti  {
 
   public static String str_usb_perm     = "ca.yyx.hu.ACTION_USB_DEVICE_PERMISSION";
 
-  public static String str_MANUFACTURER = "Android";//"Mike";
-  public static String str_MODEL        = "Android Auto";//"Android Open Automotive Protocol"
-  public static String str_DESCRIPTION  = "Head Unit";
-  public static String str_VERSION      = "1.0";
-  public static String str_URI          = "http://www.android.com/";
-  public static String str_SERIAL       = "0";//000000012345678";
+  public static String str_MAN = "Android";//"Mike";                    // Manufacturer
+  public static String str_MOD = "Android Auto";//"Android Open Automotive Protocol"  // Model
+  public static String str_DES = "Head Unit";                           // Description
+  public static String str_VER = "1.0";                                 // Version
+  public static String str_URI = "http://www.android.com/";             // URI
+  public static String str_SER = "0";//000000012345678";                // Serial #
 
   public static boolean su_installed_get () {
     boolean ret = false;
@@ -502,6 +522,23 @@ public final class hu_uti  {
     return (ret);
   }
 
+  public static boolean file_delete (final String filename) {
+    main_thread_get ("file_delete filename: " + filename);
+    java.io.File f = null;
+    boolean ret = false;
+    try {
+      f = new File (filename);
+      f.delete ();
+      ret = true;
+    }
+    catch (Throwable e) {
+      hu_uti.logd ("Throwable e: " + e);
+      e.printStackTrace();
+    }
+    hu_uti.logd ("ret: " + ret);
+    return (ret);
+  }
+
   public static boolean file_create (final String filename) {
     main_thread_get ("file_create filename: " + filename);
     java.io.File f = null;
@@ -579,6 +616,58 @@ public final class hu_uti  {
     }
     return (content);
   }
+
+
+/*
+  void device_id_get () {
+
+    if (! BuildConfig.DEBUG)
+      return;
+
+    // ANDROID_ID and TelephonyManager.getDeviceId()
+    String android_id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+    hu_uti.logd ("android_id: " + android_id);                         // android_id: c5da68763daf5900
+
+    //UUID deviceUuid = new UUID(androidId.hashCode(), ((long)tmDevice.hashCode() << 32) | tmSerial.hashCode());
+    //String deviceId = deviceUuid.toString();
+
+    android.bluetooth.BluetoothAdapter m_BluetoothAdapter =  	android.bluetooth.BluetoothAdapter.getDefaultAdapter(); 
+    String bluetooth_add = m_BluetoothAdapter.getAddress();
+    hu_uti.logd ("bluetooth_add: " + bluetooth_add);                   // bluetooth_add: B4:CE:F6:34:49:CD
+
+    android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) this.getSystemService (Context.WIFI_SERVICE);
+    String wifi_mac_address = "";
+    if (wm == null)
+      hu_uti.loge ("wm: " + wm);
+    else
+      wifi_mac_address = wm.getConnectionInfo ().getMacAddress ();
+    hu_uti.logd ("wifi_mac_address: " + wifi_mac_address);             // On some devices, it's not available when Wi-Fi is turned off
+
+    android.telephony.TelephonyManager tm = (android.telephony.TelephonyManager) this.getSystemService (Context.TELEPHONY_SERVICE);
+    String tmdi = tm.getDeviceId ();
+    hu_uti.logd ("tmdi: " + tmdi);                                     // tmdi: null
+    String sim_serial = tm.getSimSerialNumber ();
+    hu_uti.logd ("sim_serial: " + sim_serial);                         // sim_serial: null
+
+    String serial = "";
+    try {
+      serial = android.os.Build.class.getField ("SERIAL").get (null).toString ();
+      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
+    }
+    catch (Throwable t) {
+      hu_uti.loge ("Throwable t: " + t);
+    }
+    try {
+      Class<?> c = Class.forName ("android.os.SystemProperties");
+      java.lang.reflect.Method get = c.getMethod ("get", String.class);
+      serial = (String) get.invoke (c, "ro.serialno");
+      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
+    }
+    catch (Throwable t) {
+      hu_uti.loge ("Throwable t: " + t);
+    }
+  }
+*/
 
 
 }

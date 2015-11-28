@@ -78,7 +78,7 @@
     if (ena_su_perm) {    // Set Permission w/ SU:
       char cmd [256] = "su -c chmod 777 ";
       strlcat (cmd, devname, sizeof (cmd));
-      //strlcat (cmd, " 2>&1 > /sdcard/res", sizeof (cmd));
+      //strlcat (cmd, " 2>&1 > /sdcard/hu_res", sizeof (cmd));
       errno = 0;
       ret = system (cmd);                                             // !! Binaries like ssd that write to stdout cause C system() to crash !
       logd ("system() ret: %d  errno: %d (%s)", ret, errno, strerror (errno));

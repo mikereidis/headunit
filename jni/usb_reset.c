@@ -22,8 +22,8 @@
     errno = 0;
     fd = open (usb_device, O_WRONLY);
     if (fd < 0) {
-      loge ("open errno: %d (%s)\n", errno, strerror (errno));
-      return (-1);
+      logd ("open errno: %d (%s)\n", errno, strerror (errno));  // open errno: 2 (No such file or directory)  !! Reset changes directory entries for "/data/data/ca.yyx.hu/lib/libusb_reset.so /dev/bus/usb/*/*"
+      return (0);//-1);
     }
 
     logd ("Resetting USB device %s\n", usb_device);
@@ -31,8 +31,8 @@
     errno = 0;
     ret = ioctl (fd, USBDEVFS_RESET, 0);
     if (ret < 0) {
-      loge ("ioctl errno: %d (%s)\n", errno, strerror (errno));
-      return (-2);
+      logd ("ioctl errno: %d (%s)\n", errno, strerror (errno));   // ioctl errno: 21 (Is a directory)         !! Reset changes directory entries for "/data/data/ca.yyx.hu/lib/libusb_reset.so /dev/bus/usb/*/*"
+      return (0);//-2);
     }
     logd ("Reset successful\n");
 
@@ -61,6 +61,13 @@
   int main (int argc, char ** argv) {
     char * usb_device;
     int ret = 0;
+
+    int idx = 1;
+    for (idx = 1; idx < argc; idx ++) {
+      usb_device = argv [idx];
+      ret = usb_reset (usb_device);
+    }
+    return (ret);
 
 
     if (argc == 2) {

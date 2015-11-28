@@ -50,7 +50,7 @@
         logd ("hu_aap_recv_process() ret: %p", ret);
 
       int res_len = 0;
-      byte * dq_buf = read_head_buffer_get (& res_len);                 // See if there is a video buffer queued to read from
+      byte * dq_buf = vid_read_head_buf_get (& res_len);                // See if there is a video buffer queued to read from
       if (ena_log_extra || (ena_log_verbo && dq_buf != NULL))
         logd ("dq_buf: %p  res_len: %d", dq_buf, res_len);
 

@@ -186,6 +186,7 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
 #endif
 
   int iusb_bulk_transfer (int ep, byte * buf, int len, int tmo) { // 0 = unlimited timeout
+
     char * dir = "recv";
     if (ep == iusb_ep_out)
       dir = "send";
@@ -194,50 +195,60 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
       logd ("CHECK: iusb_bulk_transfer start iusb_state: %d (%s) dir: %s  ep: 0x%02x  buf: %p  len: %d  tmo: %d", iusb_state, state_get (iusb_state), dir, ep, buf, len, tmo);
       return (-1);
     }
-
+    #define MAX_LEN 65536 //16384 //8192  // 65536
+    if (ep == iusb_ep_in && len > MAX_LEN)
+      len = MAX_LEN;
     if (ena_log_extra) {
-      logd ("Start dir: %s  ep: 0x%02x  buf: %p  len: %d  tmo: %d", dir, ep, buf, len, tmo);
+      logw ("Start dir: %s  ep: 0x%02x  buf: %p  len: %d  tmo: %d", dir, ep, buf, len, tmo);
     }
-#ifndef NDEBUG
-    if (ena_log_send && ep == iusb_ep_out)
+//#ifndef NDEBUG
+    if (ena_hd_tra_send && ep == iusb_ep_out)
       hex_dump ("US: ", 16, buf, len);
-#endif
+//#endif
 
     int usb_err = -2;
     int total_bytes_xfrd = 0;
     int bytes_xfrd = 0;
-      // You should also check the transferred parameter for bulk writes. Not all of the data may have been written.
-      // Also check transferred when dealing with a timeout error code. libusb may have to split your transfer into a number of chunks to satisfy underlying O/S requirements,
-      // meaning that the timeout may expire after the first few chunks have completed. libusb is careful not to lose any data that may have been transferred;
-      // do not assume that timeout conditions indicate a complete lack of I/O.
+      // Check the transferred parameter for bulk writes. Not all of the data may have been written.
+
+      // Check transferred when dealing with a timeout error code.
+      // libusb may have to split your transfer into a number of chunks to satisfy underlying O/S requirements, meaning that the timeout may expire after the first few chunks have completed.
+      // libusb is careful not to lose any data that may have been transferred; do not assume that timeout conditions indicate a complete lack of I/O.
 
     errno = 0;
     int continue_transfer = 1;
     while (continue_transfer) {
+      bytes_xfrd = 0;                                                   // Default tranferred = 0
+
+unsigned long ms_start = ms_get ();
       usb_err = libusb_bulk_transfer (iusb_dev_hndl, ep, buf, len, & bytes_xfrd, tmo);
+unsigned long ms_duration = ms_get () - ms_start;
+if (ms_duration > 400)
+  loge ("ms_duration: %d dir: %s  len: %d  bytes_xfrd: %d  total_bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", ms_duration, dir, len, bytes_xfrd, total_bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
 
-      continue_transfer = 0;
-      if (bytes_xfrd > 0)
-        total_bytes_xfrd += bytes_xfrd;
 
-      if (bytes_xfrd > 0 && usb_err == LIBUSB_ERROR_TIMEOUT) {
-        continue_transfer = 1;
-        loge ("CONTINUE dir: %s  len: %d  bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
-        buf += bytes_xfrd;
-        len -= bytes_xfrd;
+      continue_transfer = 0;                                            // Default = transfer done
+
+      if (bytes_xfrd > 0)                                               // If bytes were transferred
+        total_bytes_xfrd += bytes_xfrd;                                 // Add to total
+
+      if ((total_bytes_xfrd > 0 || bytes_xfrd > 0) && usb_err == LIBUSB_ERROR_TIMEOUT) {          // If bytes were transferred but we had a timeout...
+//        continue_transfer = 1;                                          // Continue the transfer
+        logd ("CONTINUE dir: %s  len: %d  bytes_xfrd: %d  total_bytes_xfrd: %d  usb_err: %d (%s)", dir, len, bytes_xfrd, total_bytes_xfrd, usb_err, iusb_error_get (usb_err));
+        buf += bytes_xfrd;                                              // For next transfer, point deeper info buf
+        len -= bytes_xfrd;                                              // For next transfer, reduce buf len capacity
+//        ms_sleep (50);
       }
       else if (usb_err < 0 && usb_err != LIBUSB_ERROR_TIMEOUT)
-        loge ("Done dir: %s  len: %d  bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
-      else if (ena_log_verbo && usb_err != LIBUSB_ERROR_TIMEOUT && (ena_log_send || ep == iusb_ep_in))
-        logd ("Done dir: %s  len: %d  bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
+        loge ("Done dir: %s  len: %d  bytes_xfrd: %d  total_bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, total_bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
+      else if (ena_log_verbo && usb_err != LIBUSB_ERROR_TIMEOUT)// && (ena_hd_tra_send || ep == iusb_ep_in))
+        logd ("Done dir: %s  len: %d  bytes_xfrd: %d  total_bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, total_bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
       else if (ena_log_extra)
-        logd ("Done dir: %s  len: %d  bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
-
-      bytes_xfrd = 0;
+        logw ("Done dir: %s  len: %d  bytes_xfrd: %d  total_bytes_xfrd: %d  usb_err: %d (%s)  errno: %d (%s)", dir, len, bytes_xfrd, total_bytes_xfrd, usb_err, iusb_error_get (usb_err), errno, strerror (errno));
     }
 
     if (total_bytes_xfrd > 16384) {                                     // Previously caused problems that seem fixed by raising USB Rx buffer from 16K to 64K
-                                                                        // Streaming mode by first reading packet length may be better but may also create sync or other issues
+                                                                        // Using a streaming mode (first reading packet length) may be better but may also create sync or other issues
       //loge ("total_bytes_xfrd: %d     ???????????????? !!!!!!!!!!!!!!!!!!!!!!!!!!!!! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ?????????????????????????", total_bytes_xfrd);
     }
 
@@ -248,14 +259,14 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
       hu_usb_stop ();  // Other errors here are fatal, so stop USB
       return (-1);
     }
-    //if (ena_log_verbo)
-//      logd ("Done dir: %s  len: %d  total_bytes_xfrd: %d", dir, len, total_bytes_xfrd);
 
-    if (ep == iusb_ep_in) {
-#ifndef NDEBUG
+    //if (ena_log_verbo)
+    //  logd ("Done dir: %s  len: %d  total_bytes_xfrd: %d", dir, len, total_bytes_xfrd);
+
+//#ifndef NDEBUG
+    if (ena_hd_tra_recv && ep == iusb_ep_in)
       hex_dump ("UR: ", 16, buf, total_bytes_xfrd);
-#endif
-    }
+//#endif
 
 
     return (total_bytes_xfrd);
@@ -324,10 +335,6 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
     req_type = USB_SETUP_HOST_TO_DEVICE | USB_SETUP_TYPE_VENDOR | USB_SETUP_RECIPIENT_DEVICE;
     req_val = ACC_REQ_SEND_STRING;
 
-    char AAP_VAL_MAN [31] = "Android";
-    char AAP_VAL_MOD [97] = "Android Auto";    // "Android Open Automotive Protocol"
-
-    int garb = -1;
     iusb_control_transfer (iusb_dev_hndl, req_type, req_val, val, ACC_IDX_MAN, AAP_VAL_MAN, strlen (AAP_VAL_MAN) + 1, tmo);
     iusb_control_transfer (iusb_dev_hndl, req_type, req_val, val, ACC_IDX_MOD, AAP_VAL_MOD, strlen (AAP_VAL_MOD) + 1, tmo);
     //iusb_control_transfer (iusb_dev_hndl, req_type, req_val, val, ACC_IDX_DES, AAP_VAL_DES, strlen (AAP_VAL_DES) + 1, tmo);
@@ -486,12 +493,15 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
     }
     logd ("Device found iusb_best_vendor: 0x%04x  iusb_best_device: 0x%04x  iusb_best_man: \"%s\"  iusb_best_pro: \"%s\"", iusb_best_vendor, iusb_best_device, iusb_best_man, iusb_best_pro);
 
-    //usb_perms_set ();                                                   // Setup USB permissions, where needed
+    //usb_perms_set ();                                                 // Setup USB permissions, where needed
 
+    if ((ep_in_addr == 255 && ep_out_addr == 0) || file_get ("/sdcard/hu_disable_selinux_chmod_bus")) {    // 
+                                                                        // Disable SELinux and open /dev/bus permissions for SUsb
+      int ret = system ("su -c \"setenforce 0 ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null\""); // !! Binaries like ssd that write to stdout cause C system() to crash !
+      logd ("iusb_usb_init system() w/ su ret: %d", ret);
 
-    if (file_get ("/sdcard/suc")) {    // Set Permission w/ SU:
-      int ret = system ("su -c chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null"); // !! Binaries like ssd that write to stdout cause C system() to crash !
-      logd ("iusb_usb_init system() ret: %d", ret);
+      ret = system ("chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null"); // !! Binaries like ssd that write to stdout cause C system() to crash !
+      logd ("iusb_usb_init system() no su ret: %d", ret);
     }
 
 
@@ -522,12 +532,22 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
     struct libusb_config_descriptor * config = NULL;
     usb_err = libusb_get_config_descriptor (iusb_best_device, 0, & config);
     if (usb_err != 0) {
-      logd ("Expected Error libusb_get_config_descriptor usb_err: %d (%s)", usb_err, iusb_error_get (usb_err));    // !! ???? Normal error now ???
+      logd ("Expected Error libusb_get_config_descriptor usb_err: %d (%s)  errno: %d (%s)", usb_err, iusb_error_get (usb_err), errno, strerror (errno));    // !! ???? Normal error now ???
       //return (-1);
+
+      if (ep_in_addr == 255) {// && ep_out_addr == 0)
+        iusb_ep_in  = 129;                                  // Set  input endpoint
+        iusb_ep_out =   2;                                  // Set output endpoint
+        return (0);
+      }
+
       iusb_ep_in  = ep_in_addr; //129;                                  // Set  input endpoint
       iusb_ep_out = ep_out_addr;//  2;                                  // Set output endpoint
       return (0);
     }
+
+    //if (ep_in_addr == 255 && ep_out_addr == 0) {    // If USB forced
+
 
     int num_int = config->bNumInterfaces;                               // Get number of interfaces
     logd ("Done get_config_descriptor config: %p  num_int: %d", config, num_int);
@@ -568,11 +588,11 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
               if (iusb_ep_in > 0 && iusb_ep_out > 0) {                    // If we have both endpoints now...
                 libusb_free_config_descriptor (config);
 
-                if ((ep_in_addr != -1 || ep_out_addr != -1) && (iusb_ep_in != ep_in_addr || iusb_ep_out != ep_out_addr)) {
-                  loge ("MISMATCH Done endpoint search iusb_ep_in: 0x%02x  iusb_ep_out: 0x%02x", iusb_ep_in, iusb_ep_out);    // Favor libusb over passed in
+                if (ep_in_addr != 255 && (iusb_ep_in != ep_in_addr || iusb_ep_out != ep_out_addr)) {
+                  logw ("MISMATCH Done endpoint search iusb_ep_in: 0x%02x  iusb_ep_out: 0x%02x  ep_in_addr: 0x%02x  ep_out_addr: 0x%02x", iusb_ep_in, iusb_ep_out, ep_in_addr, ep_out_addr);    // Favor libusb over passed in
                 }
                 else
-                  logd ("Match Done endpoint search iusb_ep_in: 0x%02x  iusb_ep_out: 0x%02x", iusb_ep_in, iusb_ep_out);
+                  logd ("Match Done endpoint search iusb_ep_in: 0x%02x  iusb_ep_out: 0x%02x  ep_in_addr: 0x%02x  ep_out_addr: 0x%02x", iusb_ep_in, iusb_ep_out, ep_in_addr, ep_out_addr);
 
                 return (0);
               }

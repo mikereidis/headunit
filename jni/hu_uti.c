@@ -56,21 +56,29 @@
   int gen_server_loop_func (unsigned char * cmd_buf, int cmd_len, unsigned char * res_buf, int res_max);
   int gen_server_poll_func (int poll_ms);
 
-  int ena_log_send  = 0;//1;//0;
-  int ena_log_extra = 0;//1;//0;
-  int ena_log_verbo = 0;//1;
-  int ena_log_debug = 1;
-  int ena_log_warni = 1;
-  int ena_log_error = 1;
+    // Log stuff:
 
-  int ena_log_hexdu = 0;//1;    // Hex dump
+  int ena_log_extra   = 0;//1;//0;
+  int ena_log_verbo   = 0;//1;
+  int ena_log_debug   = 1;
+  int ena_log_warni   = 1;
+  int ena_log_error   = 1;
+
+  int ena_log_aap_send = 0;
+
+  // Enables for hex_dump:
+  int ena_hd_hu_aad_dmp = 1;        // Higher level
+  int ena_hd_tra_send   = 0;        // Lower  level
+  int ena_hd_tra_recv   = 0;
+
+  int ena_log_hexdu = 1;//1;    // Hex dump master enable
   int max_hex_dump  = 64;//32;
 
   #ifdef  LOG_FILE
   int logfd = -1;
   void logfile (char * log_line) {
     if (logfd < 0)
-      logfd = open ("/sdcard/aalog", O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+      logfd = open ("/sdcard/hulog", O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
     int written = -77;
     if (logfd >= 0)
       written = write (logfd, log_line, strlen (log_line));
@@ -557,7 +565,9 @@
 
   #define HD_MW   256
   void hex_dump (char * prefix, int width, unsigned char * buf, int len) {
-    if (! ena_log_hexdu)
+    if (0)//! strncmp (prefix, "AUDIO: ", strlen ("AUDIO: ")))
+      len = len;
+    else if (! ena_log_hexdu)
       return;
     //loge ("hex_dump prefix: \"%s\"  width: %d   buf: %p  len: %d", prefix, width, buf, len);
 
@@ -588,7 +598,7 @@
 
       if (n == width) {                                                 // If at specified line width
         n = 0;                                                          // Reset position in line counter
-        logw (line);                                                    // Log line
+        logd (line);                                                    // Log line
 
         line [0] = 0;
         if (prefix)
@@ -600,7 +610,7 @@
         strlcat (line, tmp, sizeof (line));
       }
       else if (i == len - 1)                                            // Else if at last byte
-        logw (line);                                                    // Log line
+        logd (line);                                                    // Log line
     }
   }
 
@@ -940,7 +950,7 @@
     if (ret != 0)
       loge ("sock_tmo_set setsockopt SO_REUSEADDR errno: %d (%s)", errno, strerror (errno));
     else
-      logv ("sock_tmo_set setsockopt SO_REUSEADDR Success");
+      logd ("sock_tmo_set setsockopt SO_REUSEADDR Success");
     return (0);
   }
 
@@ -1118,156 +1128,258 @@
 
 
 
-    // Buffers:
+    // Buffers: Audio, Video, identical code, should generalize
 
-  #define gen_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
-  int gen_buf_bufs_size = gen_buf_BUFS_SIZE;
+  #define aud_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
+  int aud_buf_bufs_size = aud_buf_BUFS_SIZE;
 
-  #define   NUM_gen_buf_BUFS   16            // Maximum of NUM_gen_buf_BUFS - 1 in progress; 1 is never used
-  int num_gen_buf_bufs = NUM_gen_buf_BUFS;
+  #define   NUM_aud_buf_BUFS   16            // Maximum of NUM_aud_buf_BUFS - 1 in progress; 1 is never used
+  int num_aud_buf_bufs = NUM_aud_buf_BUFS;
 
-  char gen_buf_bufs [NUM_gen_buf_BUFS] [gen_buf_BUFS_SIZE];
+  char aud_buf_bufs [NUM_aud_buf_BUFS] [aud_buf_BUFS_SIZE];
 
-  int gen_buf_lens [NUM_gen_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};//, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  int aud_buf_lens [NUM_aud_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-  int gen_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
-  int gen_buf_buf_head = 0;    // Head is next index for reader to read from.
+  int aud_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
+  int aud_buf_buf_head = 0;    // Head is next index for reader to read from.
 
-//bufs  0   1   2   3
-//tail  0   1   2   3
-//head  0   0   0   0
-//tail  1   2   3   0
-//head  1   1   1   1
-//tail  2   3   0   1
-//head  2   2   2   2
-//tail  3   0   1   2
-//head  3   3   3   3
+  int aud_buf_errs = 0;
+  int aud_max_bufs = 0;
+  int aud_sem_tail = 0;
+  int aud_sem_head = 0;
 
+  char * aud_write_tail_buf_get (int len) {                          // Get tail buffer to write to
 
-  int buf_errs = 0;
-  int max_bufs = 0;
-  int tail_sem = 0;
-  int head_sem = 0;
-
-//#define SINGLE_BUF
-  char * write_tail_buffer_get (int len) {                                // Get tail buffer to write to
-
-/*#ifdef  SINGLE_BUF
-    if (gen_buf_lens [0] != 0)
-      loge ("write_tail_buffer_get over-writing buffer in use !!!!");
-    gen_buf_lens [0] = len;
-    return (gen_buf_bufs [0]);
-
-#else*/
-    if (len > gen_buf_BUFS_SIZE) {
-      loge ("!!!!!!!!!! write_tail_buffer_get too big len: %d", len);   // E/write_tail_buffer_get(10699): !!!!!!!!!! write_tail_buffer_get too big len: 66338
+    if (len > aud_buf_BUFS_SIZE) {
+      loge ("!!!!!!!!!! aud_write_tail_buf_get too big len: %d", len);   // E/aud_write_tail_buf_get(10699): !!!!!!!!!! aud_write_tail_buf_get too big len: 66338
       return (NULL);
     }
 
-    int bufs = gen_buf_buf_tail - gen_buf_buf_head;
+    int bufs = aud_buf_buf_tail - aud_buf_buf_head;
     if (bufs < 0)                                                       // If underflowed...
-      bufs += num_gen_buf_bufs;                                          // Wrap
-    //logd ("write_tail_buffer_get start bufs: %d  head: %d  tail: %d", bufs, gen_buf_buf_head, gen_buf_buf_tail);
+      bufs += num_aud_buf_bufs;                                         // Wrap
+    //logd ("aud_write_tail_buf_get start bufs: %d  head: %d  tail: %d", bufs, aud_buf_buf_head, aud_buf_buf_tail);
 
-    if (bufs > max_bufs)                                                // If new maximum buffers in progress...
-      max_bufs = bufs;                                                  // Save new max
-    if (bufs >= num_gen_buf_bufs - 1) {                                  // If room for another (max = NUM_gen_buf_BUFS - 1)
-      loge ("write_tail_buffer_get out of gen_buf_bufs");
-      buf_errs ++;
-      //gen_buf_buf_tail = gen_buf_buf_head = 0;                          // Drop all buffers
+    if (bufs > aud_max_bufs)                                            // If new maximum buffers in progress...
+      aud_max_bufs = bufs;                                              // Save new max
+    if (bufs >= num_aud_buf_bufs - 1) {                                 // If room for another (max = NUM_aud_buf_BUFS - 1)
+      loge ("aud_write_tail_buf_get out of aud_buf_bufs");
+      aud_buf_errs ++;
+      //aud_buf_buf_tail = aud_buf_buf_head = 0;                        // Drop all buffers
       return (NULL);
     }
 
     int max_retries = 4;
     int retries = 0;
     for (retries = 0; retries < max_retries; retries ++) {
-      tail_sem ++;
-      if (tail_sem == 1)
+      aud_sem_tail ++;
+      if (aud_sem_tail == 1)
         break;
-      tail_sem --;
+      aud_sem_tail --;
+      loge ("aud_sem_tail wait");
       ms_sleep (10);
     }
     if (retries >= max_retries) {
-      loge ("tail_sem could not be acquired");
+      loge ("aud_sem_tail could not be acquired");
       return (NULL);
     }
 
-    if (gen_buf_buf_tail < 0 || gen_buf_buf_tail > num_gen_buf_bufs - 1)   // Protect
-      gen_buf_buf_tail &= num_gen_buf_bufs - 1;
+    if (aud_buf_buf_tail < 0 || aud_buf_buf_tail > num_aud_buf_bufs - 1)   // Protect
+      aud_buf_buf_tail &= num_aud_buf_bufs - 1;
 
-    gen_buf_buf_tail ++;
+    aud_buf_buf_tail ++;
 
-    if (gen_buf_buf_tail < 0 || gen_buf_buf_tail > num_gen_buf_bufs - 1)
-      gen_buf_buf_tail &= num_gen_buf_bufs - 1;
+    if (aud_buf_buf_tail < 0 || aud_buf_buf_tail > num_aud_buf_bufs - 1)
+      aud_buf_buf_tail &= num_aud_buf_bufs - 1;
 
-    char * ret = gen_buf_bufs [gen_buf_buf_tail];
-    gen_buf_lens [gen_buf_buf_tail] = len;
+    char * ret = aud_buf_bufs [aud_buf_buf_tail];
+    aud_buf_lens [aud_buf_buf_tail] = len;
 
-    //logd ("write_tail_buffer_get done  ret: %p  bufs: %d  tail len: %d  head: %d  tail: %d", ret, bufs, len, gen_buf_buf_head, gen_buf_buf_tail);
+    //logd ("aud_write_tail_buf_get done  ret: %p  bufs: %d  tail len: %d  head: %d  tail: %d", ret, bufs, len, aud_buf_buf_head, aud_buf_buf_tail);
 
-    tail_sem --;
-//#endif
+    aud_sem_tail --;
 
     return (ret);
   }
 
-  char * read_head_buffer_get (int * len) {                              // Get head buffer to read from
+  char * aud_read_head_buf_get (int * len) {                              // Get head buffer to read from
 
-/*#ifdef  SINGLE_BUF
-    if (gen_buf_lens [0] <= 0)
-      loge ("read_head_buffer_get no buffer available !!!!");
-    * len = gen_buf_lens [0];
-    return (gen_buf_bufs [0]);
-
-#else*/
     if (len == NULL) {
-      loge ("!!!!!!!!!! read_head_buffer_get");
+      loge ("!!!!!!!!!! aud_read_head_buf_get");
       return (NULL);
     }
     * len = 0;
 
-    int bufs = gen_buf_buf_tail - gen_buf_buf_head;
+    int bufs = aud_buf_buf_tail - aud_buf_buf_head;
     if (bufs < 0)                                                       // If underflowed...
-      bufs += num_gen_buf_bufs;                                          // Wrap
-    //logd ("read_head_buffer_get start bufs: %d  head: %d  tail: %d", bufs, gen_buf_buf_head, gen_buf_buf_tail);
+      bufs += num_aud_buf_bufs;                                          // Wrap
+    //logd ("aud_read_head_buf_get start bufs: %d  head: %d  tail: %d", bufs, aud_buf_buf_head, aud_buf_buf_tail);
 
     if (bufs <= 0) {                                                    // If no buffers are ready...
       if (ena_log_extra)
-        logd ("read_head_buffer_get no gen_buf_bufs");
-      //buf_errs ++;  // Not an error; just no data
-      //gen_buf_buf_tail = gen_buf_buf_head = 0;                          // Drop all buffers
+        logd ("aud_read_head_buf_get no aud_buf_bufs");
+      //aud_buf_errs ++;  // Not an error; just no data
+      //aud_buf_buf_tail = aud_buf_buf_head = 0;                          // Drop all buffers
       return (NULL);
     }
 
     int max_retries = 4;
     int retries = 0;
     for (retries = 0; retries < max_retries; retries ++) {
-      head_sem ++;
-      if (head_sem == 1)
+      aud_sem_head ++;
+      if (aud_sem_head == 1)
         break;
-      head_sem --;
+      aud_sem_head --;
+      loge ("aud_sem_head wait");
       ms_sleep (10);
     }
     if (retries >= max_retries) {
-      loge ("head_sem could not be acquired");
+      loge ("aud_sem_head could not be acquired");
       return (NULL);
     }
 
-    if (gen_buf_buf_head < 0 || gen_buf_buf_head > num_gen_buf_bufs - 1)   // Protect
-      gen_buf_buf_head &= num_gen_buf_bufs - 1;
+    if (aud_buf_buf_head < 0 || aud_buf_buf_head > num_aud_buf_bufs - 1)   // Protect
+      aud_buf_buf_head &= num_aud_buf_bufs - 1;
 
-    gen_buf_buf_head ++;
+    aud_buf_buf_head ++;
 
-    if (gen_buf_buf_head < 0 || gen_buf_buf_head > num_gen_buf_bufs - 1)
-      gen_buf_buf_head &= num_gen_buf_bufs - 1;
+    if (aud_buf_buf_head < 0 || aud_buf_buf_head > num_aud_buf_bufs - 1)
+      aud_buf_buf_head &= num_aud_buf_bufs - 1;
 
-    char * ret = gen_buf_bufs [gen_buf_buf_head];
-    * len = gen_buf_lens [gen_buf_buf_head];
+    char * ret = aud_buf_bufs [aud_buf_buf_head];
+    * len = aud_buf_lens [aud_buf_buf_head];
 
-    //logd ("read_head_buffer_get done  ret: %p  bufs: %d  head len: %d  head: %d  tail: %d", ret, bufs, * len, gen_buf_buf_head, gen_buf_buf_tail);
+    //logd ("aud_read_head_buf_get done  ret: %p  bufs: %d  head len: %d  head: %d  tail: %d", ret, bufs, * len, aud_buf_buf_head, aud_buf_buf_tail);
 
-    head_sem --;
-//#endif
+    aud_sem_head --;
+
+    return (ret);
+  }
+
+
+
+  #define vid_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
+  int vid_buf_bufs_size = vid_buf_BUFS_SIZE;
+
+  #define   NUM_vid_buf_BUFS   16            // Maximum of NUM_vid_buf_BUFS - 1 in progress; 1 is never used
+  int num_vid_buf_bufs = NUM_vid_buf_BUFS;
+
+  char vid_buf_bufs [NUM_vid_buf_BUFS] [vid_buf_BUFS_SIZE];
+
+  int vid_buf_lens [NUM_vid_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+  int vid_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
+  int vid_buf_buf_head = 0;    // Head is next index for reader to read from.
+
+  int vid_buf_errs = 0;
+  int vid_max_bufs = 0;
+  int vid_sem_tail = 0;
+  int vid_sem_head = 0;
+
+  char * vid_write_tail_buf_get (int len) {                          // Get tail buffer to write to
+
+    if (len > vid_buf_BUFS_SIZE) {
+      loge ("!!!!!!!!!! vid_write_tail_buf_get too big len: %d", len);   // E/vid_write_tail_buf_get(10699): !!!!!!!!!! vid_write_tail_buf_get too big len: 66338
+      return (NULL);
+    }
+
+    int bufs = vid_buf_buf_tail - vid_buf_buf_head;
+    if (bufs < 0)                                                       // If underflowed...
+      bufs += num_vid_buf_bufs;                                         // Wrap
+    //logd ("vid_write_tail_buf_get start bufs: %d  head: %d  tail: %d", bufs, vid_buf_buf_head, vid_buf_buf_tail);
+
+    if (bufs > vid_max_bufs)                                            // If new maximum buffers in progress...
+      vid_max_bufs = bufs;                                              // Save new max
+    if (bufs >= num_vid_buf_bufs - 1) {                                 // If room for another (max = NUM_vid_buf_BUFS - 1)
+      loge ("vid_write_tail_buf_get out of vid_buf_bufs");
+      vid_buf_errs ++;
+      //vid_buf_buf_tail = vid_buf_buf_head = 0;                        // Drop all buffers
+      return (NULL);
+    }
+
+    int max_retries = 4;
+    int retries = 0;
+    for (retries = 0; retries < max_retries; retries ++) {
+      vid_sem_tail ++;
+      if (vid_sem_tail == 1)
+        break;
+      vid_sem_tail --;
+      loge ("vid_sem_tail wait");
+      ms_sleep (10);
+    }
+    if (retries >= max_retries) {
+      loge ("vid_sem_tail could not be acquired");
+      return (NULL);
+    }
+
+    if (vid_buf_buf_tail < 0 || vid_buf_buf_tail > num_vid_buf_bufs - 1)   // Protect
+      vid_buf_buf_tail &= num_vid_buf_bufs - 1;
+
+    vid_buf_buf_tail ++;
+
+    if (vid_buf_buf_tail < 0 || vid_buf_buf_tail > num_vid_buf_bufs - 1)
+      vid_buf_buf_tail &= num_vid_buf_bufs - 1;
+
+    char * ret = vid_buf_bufs [vid_buf_buf_tail];
+    vid_buf_lens [vid_buf_buf_tail] = len;
+
+    //logd ("vid_write_tail_buf_get done  ret: %p  bufs: %d  tail len: %d  head: %d  tail: %d", ret, bufs, len, vid_buf_buf_head, vid_buf_buf_tail);
+
+    vid_sem_tail --;
+
+    return (ret);
+  }
+
+  char * vid_read_head_buf_get (int * len) {                              // Get head buffer to read from
+
+    if (len == NULL) {
+      loge ("!!!!!!!!!! vid_read_head_buf_get");
+      return (NULL);
+    }
+    * len = 0;
+
+    int bufs = vid_buf_buf_tail - vid_buf_buf_head;
+    if (bufs < 0)                                                       // If underflowed...
+      bufs += num_vid_buf_bufs;                                          // Wrap
+    //logd ("vid_read_head_buf_get start bufs: %d  head: %d  tail: %d", bufs, vid_buf_buf_head, vid_buf_buf_tail);
+
+    if (bufs <= 0) {                                                    // If no buffers are ready...
+      if (ena_log_extra)
+        logd ("vid_read_head_buf_get no vid_buf_bufs");
+      //vid_buf_errs ++;  // Not an error; just no data
+      //vid_buf_buf_tail = vid_buf_buf_head = 0;                          // Drop all buffers
+      return (NULL);
+    }
+
+    int max_retries = 4;
+    int retries = 0;
+    for (retries = 0; retries < max_retries; retries ++) {
+      vid_sem_head ++;
+      if (vid_sem_head == 1)
+        break;
+      vid_sem_head --;
+      loge ("vid_sem_head wait");
+      ms_sleep (10);
+    }
+    if (retries >= max_retries) {
+      loge ("vid_sem_head could not be acquired");
+      return (NULL);
+    }
+
+    if (vid_buf_buf_head < 0 || vid_buf_buf_head > num_vid_buf_bufs - 1)   // Protect
+      vid_buf_buf_head &= num_vid_buf_bufs - 1;
+
+    vid_buf_buf_head ++;
+
+    if (vid_buf_buf_head < 0 || vid_buf_buf_head > num_vid_buf_bufs - 1)
+      vid_buf_buf_head &= num_vid_buf_bufs - 1;
+
+    char * ret = vid_buf_bufs [vid_buf_buf_head];
+    * len = vid_buf_lens [vid_buf_buf_head];
+
+    //logd ("vid_read_head_buf_get done  ret: %p  bufs: %d  head len: %d  head: %d  tail: %d", ret, bufs, * len, vid_buf_buf_head, vid_buf_buf_tail);
+
+    vid_sem_head --;
 
     return (ret);
   }
@@ -1330,7 +1442,7 @@
     #endif
   #else
     //struct hostent *hp;
-    struct sockaddr_in  srv_addr,cli_addr;
+    struct sockaddr_in  srv_addr, cli_addr;
     socklen_t cli_len = 0;
   #endif
   

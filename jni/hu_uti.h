@@ -30,9 +30,15 @@
 
   #include <dirent.h>                                                   // For opendir (), readdir (), closedir (), DIR, struct dirent.
 
+  // Enables for hex_dump:
+  extern int ena_hd_hu_aad_dmp;
+  extern int ena_hd_tra_send;
+  extern int ena_hd_tra_recv;
+
+  extern int ena_log_aap_send;
+
   extern int ena_log_extra;
   extern int ena_log_verbo;
-  extern int ena_log_send;
 
   #define byte unsigned char
   #define DEFBUF  65536     //16384                                                 // Default buffer size is maximum for USB
@@ -76,6 +82,12 @@
   #define  logw(...)  hu_log(hu_LOG_WAR,LOGTAG,__func__,__VA_ARGS__)
   #define  loge(...)  hu_log(hu_LOG_ERR,LOGTAG,__func__,__VA_ARGS__)
 
+//!!
+//  #define  logx(...)
+//  #define  logv(...)
+//  #define  logd(...)
+//  #define  logw(...)
+
 #endif
 
   int hu_log (int prio, const char * tag, const char * func, const char * fmt, ...);
@@ -84,8 +96,15 @@
   unsigned long ms_get          ();
   unsigned long ms_sleep        (unsigned long ms);
   void hex_dump                 (char * prefix, int width, unsigned char * buf, int len);
-  char * write_tail_buffer_get  (int len);
-  char * read_head_buffer_get   (int * len);
+  char * vid_write_tail_buf_get  (int len);
+  char * vid_read_head_buf_get   (int * len);
+  char * aud_write_tail_buf_get  (int len);
+  char * aud_read_head_buf_get   (int * len);
+
+  extern int vid_buf_buf_tail;    // Tail is next index for writer to write to.   If head = tail, there is no info.
+  extern int vid_buf_buf_head;    // Head is next index for reader to read from.
+  extern int aud_buf_buf_tail;    // Tail is next index for writer to write to.   If head = tail, there is no info.
+  extern int aud_buf_buf_head;    // Head is next index for reader to read from.
 
   #ifndef __ANDROID_API__
     #define strlcpy   strncpy
