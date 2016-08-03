@@ -10,7 +10,8 @@
 #endif
 
   int iaap_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
-
+  int use_audio=1;
+  
   char * chan_get (int chan) {
     switch (chan) {
       case AA_CH_CTR: return ("CTR");
@@ -56,13 +57,35 @@
   int iaap_tra_recv_tmo = 150;//100;//1;//10;//100;//250;//100;//250;//100;//25; // 10 doesn't work ? 100 does
   int iaap_tra_send_tmo = 250;//2;//25;//250;//500;//100;//500;//250;
 
-  int ihu_tra_start (byte ep_in_addr, byte ep_out_addr) {
+  int ihu_tra_start (byte ep_in_addr, byte ep_out_addr, char * myip_string, int transport_audio) {
+	  logd("The audio transport should be now %d",transport_audio);
+	  use_audio=transport_audio;
+	int my_mode = 0;
     if (ep_in_addr == 255 && ep_out_addr == 255) {
-      logd ("AA over Wifi");
+      logd ("AA Wifi Direct");
       transport_type = 2;       // WiFi
       iaap_tra_recv_tmo = 1;
       iaap_tra_send_tmo = 2;
+	  my_mode=2;
     }
+	
+	else if (ep_in_addr == 255 && ep_out_addr == 1) {
+	  ep_out_addr=255;
+      logd ("AA Self Mode");
+      transport_type = 2;       // Self
+      iaap_tra_recv_tmo = 1;
+      iaap_tra_send_tmo = 2;
+	  my_mode=3;
+    }
+	else if (ep_in_addr == 255 && ep_out_addr == 2) {
+	  ep_out_addr=255;
+      logd ("AA Wifi");
+      transport_type = 2;       // WiFi
+      iaap_tra_recv_tmo = 1;
+      iaap_tra_send_tmo = 2;
+	  my_mode=4;
+    }
+	 
     else {
       transport_type = 1;       // USB
       logd ("AA over USB");
@@ -70,10 +93,10 @@
       iaap_tra_send_tmo = 250;
     }
     if (transport_type == 1)
-      return (hu_usb_start  (ep_in_addr, ep_out_addr));
+      return (hu_usb_start  (ep_in_addr, ep_out_addr,""));
     else if (transport_type == 2)
-      return (hu_tcp_start  (ep_in_addr, ep_out_addr));
-    else
+		return (hu_tcp_start  (ep_in_addr, ep_out_addr, myip_string));
+	 else
       return (-1);
   }
 
@@ -321,7 +344,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                      0x4a, 0,
 //*/
 //*
-                        0x12, 4, 'R', 'e', 'i', 'd',//1, 'A', // Car Manuf          Part of "remembered car"
+                        0x12, 4, 'E', 'm', 'i', 'l',//1, 'A', // Car Manuf          Part of "remembered car"
                         0x1A, 4, 'A', 'l', 'b', 'e',//1, 'B', // Car Model
                         0x22, 4, '2', '0', '1', '6',//1, 'C', // Car Year           Part of "remembered car"
                         0x2A, 4, '0', '0', '0', '1',//1, 'D', // Car Serial     Not Part of "remembered car" ??     (vehicleId=null)
@@ -403,9 +426,12 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
       logd ("Service Discovery Request");                               // S 0 CTR b src: HU  lft:   113  msg_type:     6 Service Discovery Response    S 0 CTR b 00000000 0a 08 08 01 12 04 0a 02 08 0b 0a 13 08 02 1a 0f
 
     int sd_buf_len = sizeof (sd_buf);
-    if (wifi_direct && (file_get ("/data/data/ca.yyx.hu/files/nfc_wifi") || file_get ("/sdcard/hu_disable_audio_out")))    // If self or disable file exists...
+   logd("hu_app_start, use_audio value is reported as %d!",use_audio);
+   if (use_audio<1)
+   {
+	   logd("hu_app_start, removing audio headers!");
       sd_buf_len -= sd_buf_aud_len;                                     // Remove audio outputs from service discovery response buf
-
+   }
     return (hu_aap_enc_send (chan, sd_buf, sd_buf_len));                // Send Service Discovery Response from sd_buf
   }
   int aa_pro_ctr_a06 (int chan, byte * buf, int len) {                  // Service Discovery Response
@@ -1134,8 +1160,8 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     return (ret);
   }
 
-  int hu_aap_start (byte ep_in_addr, byte ep_out_addr) {                // Starts Transport/USBACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
-
+  int hu_aap_start (byte ep_in_addr, byte ep_out_addr,char * myip_string, int transport_audio) {                // Starts Transport/USBACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
+logd("Starting hu_aap_start %s audio transport: %d",myip_string);
     if (iaap_state == hu_STATE_STARTED) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (0);
@@ -1144,7 +1170,7 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     iaap_state = hu_STATE_STARTIN;
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
-    int ret = ihu_tra_start (ep_in_addr, ep_out_addr);                   // Start Transport/USBACC/OAP
+    int ret = ihu_tra_start (ep_in_addr, ep_out_addr, myip_string, transport_audio);                   // Start Transport/USBACC/OAP
     if (ret) {
       iaap_state = hu_STATE_STOPPED;
       logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
@@ -1284,7 +1310,7 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
     int min_size_hdr = 6;
     int rx_len = sizeof (rx_buf);
     if (transport_type == 2)                                            // If wifi...
-      rx_len = min_size_hdr;                                            // Just get the header
+      rx_len = min_size_hdr;                                           // Just get the header
 
     int have_len = 0;                                                   // Length remaining to process for all sub-packets plus 4/8 byte headers
 

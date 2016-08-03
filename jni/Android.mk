@@ -80,7 +80,9 @@ else ifeq   ($(TARGET_ARCH_ABI), arm64-v8a) #  LOCAL_LDLIBS    := -llog -lssl -l
 
   LOCAL_STATIC_LIBRARIES := libusbnok libssl libcrypto
 else ifeq   ($(TARGET_ARCH_ABI), x86)
-  LOCAL_LDLIBS    := -llog -l/home/m/dev/hu/jni/libsx86/libssl.so  -l/home/m/dev/hu/jni/libsx86/libcrypto.so -l/home/m/dev/hu/jni/libsx86/libusbnok.a  #LOCAL_LDLIBS    := -llog #-lssl -lcrypto
+  LOCAL_LDLIBS    := -llog
+  LOCAL_STATIC_LIBRARIES := libusbnok libssl libcrypto
+  #LOCAL_LDLIBS    := -llog -l/home/m/dev/hu/jni/libsx86/libssl.so  -l/home/m/dev/hu/jni/libsx86/libcrypto.so -l/home/m/dev/hu/jni/libsx86/libusbnok.a  #LOCAL_LDLIBS    := -llog #-lssl -lcrypto
   #LOCAL_SHARED_LIBRARIES := libssl libcrypto
   #LOCAL_STATIC_LIBRARIES := libusbnok    #else ifeq  ($(TARGET_ARCH_ABI), armeabi-v7a)
 else

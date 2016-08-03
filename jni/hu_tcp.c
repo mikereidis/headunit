@@ -5,7 +5,7 @@
   #include "hu_uti.h"                                                  // Utilities
 
   int itcp_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
-
+  char * myip_string="127.0.0.1"; //Default case is loopback we might receive other address.
 
   #ifdef __ANDROID_API__
   //#include <libtcp.h>
@@ -19,13 +19,6 @@
   #include <netinet/ip.h>
   #include <netinet/tcp.h>
 
-  //#include <netdb.h> 
-
-
-    // Data: 
-
-  //struct libtcp_device_handle * itcp_dev_hndl      = NULL;
-  //libtcp_device *               itcp_best_device  = NULL;
   int   itcp_ep_in          = -1;
   int   itcp_ep_out         = -1;
 
@@ -35,32 +28,7 @@
         return ("LIBtcp_SUCCESS");
       case -1: //LIBtcp_ERROR_IO:                                             // -1
         return ("LIBtcp_ERROR_IO");
-/*
-      case LIBtcp_ERROR_INVALID_PARAM:                                  // -2
-        return ("LIBtcp_ERROR_INVALID_PARAM");
-      case LIBtcp_ERROR_ACCESS:                                         // -3
-        return ("LIBtcp_ERROR_ACCESS");
-      case LIBtcp_ERROR_NO_DEVICE:                                      // -4
-        return ("LIBtcp_ERROR_NO_DEVICE");
-      case LIBtcp_ERROR_NOT_FOUND:                                      // -5
-        return ("LIBtcp_ERROR_NOT_FOUND");
-      case LIBtcp_ERROR_BUSY:                                           // -6
-        return ("LIBtcp_ERROR_BUSY");
-      case LIBtcp_ERROR_TIMEOUT:                                        // -7
-        return ("LIBtcp_ERROR_TIMEOUT");
-      case LIBtcp_ERROR_OVERFLOW:                                       // -8
-        return ("LIBtcp_ERROR_OVERFLOW");
-      case LIBtcp_ERROR_PIPE:                                           // -9
-        return ("LIBtcp_ERROR_PIPE");
-      case LIBtcp_ERROR_INTERRUPTED:                                    // -10
-        return ("Error:LIBtcp_ERROR_INTERRUPTED");
-      case LIBtcp_ERROR_NO_MEM:                                         // -11
-        return ("LIBtcp_ERROR_NO_MEM");
-      case LIBtcp_ERROR_NOT_SUPPORTED:                                  // -12
-        return ("LIBtcp_ERROR_NOT_SUPPORTED");
-      case LIBtcp_ERROR_OTHER:                                          // -99
-        return ("LIBtcp_ERROR_OTHER");
-*/
+
     }
     return ("LIBtcp_ERROR Unknown error");//: %d", error);
   }
@@ -97,7 +65,6 @@
     errno = 0;
     int continue_transfer = 1;
     while (continue_transfer) {
-//      tcp_err = libtcp_bulk_transfer (itcp_dev_hndl, ep, buf, len, & bytes_xfrd, tmo);
 
       continue_transfer = 0;
       if (bytes_xfrd > 0)
@@ -132,13 +99,9 @@
       return (-1);
     }
 
-    //if (ena_log_verbo)
-    //  logd ("Done dir: %s  len: %d  total_bytes_xfrd: %d", dir, len, total_bytes_xfrd);
-
-//#ifndef NDEBUG
     if (ena_hd_tra_recv && ep == itcp_ep_in)
       hex_dump ("UR: ", 16, buf, total_bytes_xfrd);
-//#endif
+
 
 
     return (total_bytes_xfrd);
@@ -184,15 +147,11 @@
         if (ret == 0 || errno == EAGAIN || errno == ETIMEDOUT)
           return (0);
         loge ("Error read  errno: %d (%s)", errno, strerror (errno));
-        //ms_sleep (101);                                                 // Sleep 0.1 second to try to clear errors
-        //close (tcp_io_fd);
-        //ms_sleep (101);                                                 // Sleep 0.1 second to try to clear errors
-        //continue;
+  
         return (ret);
       }
       else {
-        //logd ("cli_len: %d  fam: %d  addr: 0x%x  port: %d",cli_len,cli_addr.sin_family, ntohl (cli_addr.sin_addr.s_addr), ntohs (cli_addr.sin_port));
-        //hex_dump ("", 32, cmd_buf, n);
+
         return (ret);
       }
     }
@@ -239,16 +198,15 @@
   #define CS_SOCK_TYPE    SOCK_STREAM
   #define   RES_DATA_MAX  65536
 
-  //int gen_server_exiting = 0;
 
-  //int tmo = 100;
 
   struct sockaddr_in  cli_addr = {0};
   socklen_t cli_len = 0;
 
-  int wifi_direct = 1;//0;
-
   int itcp_accept (int tmo) {
+
+  
+  
 
     if (tcp_so_fd < 0)
       return (-1);
@@ -262,15 +220,8 @@
 
     errno = 0;
     int ret = 0;
-    if (wifi_direct) {
-      tcp_io_fd = accept (tcp_so_fd, (struct sockaddr *) & cli_addr, & cli_len);
-      if (tcp_io_fd < 0) {
-        loge ("Error accept errno: %d (%s)", errno, strerror (errno));
-        return (-1);
-      }
-    }
-    else {
-      cli_addr.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
+	  	   cli_addr.sin_addr.s_addr  = inet_addr(myip_string);
+	
       cli_addr.sin_family = AF_INET;
       cli_addr.sin_port = htons (5277);
       //logd ("cli_len: %d  fam: %d  addr: 0x%x  port: %d",cli_len,cli_addr.sin_family, ntohl (cli_addr.sin_addr.s_addr), ntohs (cli_addr.sin_port));
@@ -281,16 +232,9 @@
         return (-1);
       }
       tcp_io_fd = tcp_so_fd;
-    }
+  //  }
 
-/*
-    int flag = 1;
-    int ret = setsockopt (tcp_io_fd, SOL_TCP, TCP_NODELAY, & flag, sizeof (flag));  // Only need this for IO socket from accept() ??
-    if (ret != 0)
-      loge ("setsockopt TCP_NODELAY errno: %d (%s)", errno, strerror (errno));
-    else
-      logd ("setsockopt TCP_NODELAY Success");
-*/
+
     if ( cli_addr.sin_addr.s_addr == htonl (INADDR_LOOPBACK) )
       logd ("Success accept() from local host loopback");
     else
@@ -328,50 +272,10 @@
     sock_reuse_set (tcp_so_fd);
 
     //if (tmo != 0)
-    //  sock_tmo_set (tcp_so_fd, tmo);                                   // If polling mode, set socket timeout for polling every tmo milliseconds
+    //  sock_tmo_set (tcp_so_fd, tmo);                                 // Might need consider using pooling again
 
-if (wifi_direct) {
-    memset ((char *) & srv_addr, sizeof (srv_addr), 0);
 
-    srv_addr.sin_family = AF_INET;
-    srv_addr.sin_addr.s_addr = htonl (INADDR_ANY);                      // Will bind to any/all Interfaces/IPs
 
-    //errno = 0;
-    //hp = gethostbyname ("localhost");
-    //if (hp == 0) {
-    //  loge ("Error gethostbyname  errno: %d (%s)", errno, strerror (errno));
-    //  return (-2);
-    //}
-    //bcopy ((char *) hp->h_addr, (char *) & srv_addr.sin_addr, hp->h_length);
-    srv_addr.sin_port = htons (net_port);
-    srv_len = sizeof (struct sockaddr_in);
-
-    logd ("srv_len: %d  fam: %d  addr: 0x%x  port: %d", srv_len, srv_addr.sin_family, ntohl (srv_addr.sin_addr.s_addr), ntohs (srv_addr.sin_port));
-    errno = 0;
-    if (bind (tcp_so_fd, (struct sockaddr *) & srv_addr, srv_len) < 0) {   // Bind socket to server address
-      loge ("Error bind  errno: %d (%s)", errno, strerror (errno));
-      loge ("Inet stream continuing despite bind error");               // OK to continue w/ Internet Stream
-    }
-
-    // Done after socket() and before bind() so don't repeat it here ?
-    //if (tmo != 0)
-    //  sock_tmo_set (tcp_so_fd, tmo);                                   // If polling mode, set socket timeout for polling every tmo milliseconds
-
-  // Get command from client
-    errno = 0;
-    if (listen (tcp_so_fd, 5)) {                                           // Backlog= 5; likely don't need this
-      loge ("Error listen  errno: %d (%s)", errno, strerror (errno));
-      return (-4);
-    }
-  
-    logd ("itcp_init Ready");
-    if (file_get ("/data/data/ca.yyx.hu/files/nfc_wifi")) {
-      int ret = system ("su -c \"am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity -f 32768 1>/dev/null 2>/dev/null\""); // !! Binaries like ssd that write to stdout cause C system() to crash !
-      logd ("itcp_init am start ret: %d", ret);
-    }
-}
-
-    //tcp_io_fd = -1;
     while (tcp_io_fd < 0) {                                             // While we don't have an IO socket file descriptor...
       itcp_accept (100);                                                // Try to get one with 100 ms timeout
     }
@@ -390,7 +294,10 @@ if (wifi_direct) {
   }
 
 
-  int hu_tcp_start (byte ep_in_addr, byte ep_out_addr) {
+  int hu_tcp_start (byte ep_in_addr, byte ep_out_addr, char * myip) {
+
+	myip_string=myip;
+	
     int ret = 0;
 
     if (itcp_state == hu_STATE_STARTED) {
@@ -398,9 +305,7 @@ if (wifi_direct) {
       return (0);
     }
 
-    //#include <sys/prctl.h>
-    //ret = prctl (PR_GET_DUMPABLE, 1, 0, 0, 0);  // 1 = SUID_DUMP_USER
-    //logd ("prctl ret: %d", ret);
+ 
 
     itcp_state = hu_STATE_STARTIN;
     logd ("  SET: itcp_state: %d (%s)", itcp_state, state_get (itcp_state));

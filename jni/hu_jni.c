@@ -17,12 +17,12 @@
   int aap_state_start_error = 0;
   int aap_state_starts  = 0;
 
-  int jni_aa_cmd (int cmd_len, char * cmd_buf, int res_max, char * res_buf) {
+  int jni_aa_cmd (int cmd_len, char * cmd_buf, int res_max, char * res_buf, char * myip_string, int transport_audio) {
     if (ena_log_extra || cmd_len >= 1)
-      logd ("cmd_len: %d  cmd_buf %p  res_max: %d  res_buf: %p", cmd_len, cmd_buf, res_max, res_buf);
+      logd ("trans audop: %d, cmd_len: %d  cmd_buf %p  res_max: %d  res_buf: %p", transport_audio, cmd_len, cmd_buf, res_max, res_buf);
     int res_len = 0;
     int ret = 0;
-
+	
 
     int vid_bufs = vid_buf_buf_tail - vid_buf_buf_head;
     int aud_bufs = vid_buf_buf_tail - vid_buf_buf_head;
@@ -32,7 +32,7 @@
       byte ep_in_addr  = cmd_buf [1];
       byte ep_out_addr = cmd_buf [2];                                   // Get endpoints passed
 
-      ret = hu_aap_start (ep_in_addr, ep_out_addr);                     // Start USB/ACC/OAP, AA Protocol
+      ret = hu_aap_start (ep_in_addr, ep_out_addr, myip_string, transport_audio);                     // Start USB/ACC/OAP, AA Protocol
 
       aap_state_starts ++;                                              // Count error starts too
       if (ret == 0) {
@@ -138,8 +138,15 @@
     return (res_len);
   }
 
-  JNIEXPORT jint Java_ca_yyx_hu_hu_1tra_native_1aa_1cmd (JNIEnv * env, jobject thiz, jint cmd_len, jbyteArray cmd_buf, jint res_len, jbyteArray res_buf) {
+  JNIEXPORT jint Java_gb_xxy_hr_hu_1tra_native_1aa_1cmd (JNIEnv * env, jobject thiz, jint cmd_len, jbyteArray cmd_buf, jint res_len, jbyteArray res_buf, jstring myip_string, jint transport_audio) {
+	  
+	char *nativeString = (*env)->GetStringUTFChars(env, myip_string, 0);
 
+   // use your string
+
+   (*env)->ReleaseStringUTFChars(env, myip_string, nativeString);
+	  
+	  
     if (ena_log_extra)
       logd ("cmd_buf: %p  cmd_len: %d  res_buf: %p  res_len: %d", cmd_buf, cmd_len,  res_buf, res_len);
 
@@ -159,7 +166,7 @@
     aa_cmd_buf = (*env)->GetByteArrayElements (env, cmd_buf, NULL);
     aa_res_buf = (*env)->GetByteArrayElements (env, res_buf, NULL);
 
-    int len = jni_aa_cmd (cmd_len, aa_cmd_buf, res_len, aa_res_buf);
+    int len = jni_aa_cmd (cmd_len, aa_cmd_buf, res_len, aa_res_buf, nativeString, transport_audio);
 
     if (cmd_buf != NULL)
       (*env)->ReleaseByteArrayElements (env, cmd_buf, aa_cmd_buf, 0);
