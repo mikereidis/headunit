@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+  <EditTextPreference android:title="Default Wifi IP"
+                      android:key="wifiip"
+					  android:defaultValue="192.168.43.1"
+                      android:summary="Specify the IP of the phone"></EditTextPreference>
+  <CheckBoxPreference android:title="Transport audio"
+                      android:defaultValue="true"
+                      android:summary="Unchecking will keep the audio on the phone, highly recomanded to do so for Wifi connections."
+                      android:key="phoneaudio" />
+ 
+</PreferenceScreen>
