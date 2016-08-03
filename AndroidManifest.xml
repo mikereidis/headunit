@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="ca.yyx.hu"
-  android:versionCode="22"
-  android:versionName="2015_11_28" >
+  package="gb.xxy.hr"
+  android:versionCode="1"
+  android:versionName="Headunit Reloaded V1" >
 
   <uses-feature android:name="android.hardware.usb.host"          android:required="false"/>
   <uses-feature android:name="android.hardware.screen.landscape"  android:required="false"/>
@@ -31,7 +31,8 @@
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <uses-permission android:name="android.permission.ACCESS_SUPERUSER"/>
+<!--    <uses-permission android:name="android.permission.ACCESS_SUPERUSER"/>
+-->
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.BROADCAST_STICKY"/>
     <uses-permission android:name="android.permission.BLUETOOTH"/>
@@ -43,7 +44,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
 
-  <application android:label="Headunit"
+  <application android:label="Headunit Reloaded"
     android:icon="@drawable/hu_icon_256"
     android:hardwareAccelerated="true">
 
@@ -63,7 +64,7 @@ android:screenOrientation="portrait"
       android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 -->
     <activity android:name=".hu_act"
-      android:label="Headunit"
+      android:label="Headunit Reloaded"
       android:launchMode="singleInstance"
 
       android:screenOrientation="sensorLandscape"
@@ -71,6 +72,7 @@ android:screenOrientation="portrait"
 
 android:theme="@style/AppTheme" 
       >
+
       <intent-filter>
         <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
         <category android:name="android.intent.category.DEFAULT" />
@@ -96,7 +98,9 @@ android:theme="@style/AppTheme"
 <!-- 
 -->
     </activity>
-
+	  <activity android:name=".hu_pref" android:label="Settings"
+        android:screenOrientation="landscape">
+	 </activity>
   </application>
 </manifest>
 <!-- 
