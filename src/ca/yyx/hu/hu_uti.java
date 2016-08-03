@@ -4,7 +4,7 @@
 // hu_uti.log
 
 
-package ca.yyx.hu;
+package gb.xxy.hr;
 
 import android.bluetooth.BluetoothAdapter;
 import android.net.NetworkInfo;
@@ -82,7 +82,7 @@ public final class hu_uti  {
     try {
       if (tag_prefix != null && ! tag_prefix.equals (""))
         return (tag_prefix);
-      String pkg = "ca.yyx.hu";
+      String pkg = "gb.xxy.hr";
       tag_prefix = pkg.substring (7);
       if (tag_prefix.equals (""))
         tag_prefix = "s!";
@@ -388,7 +388,7 @@ public final class hu_uti  {
 */
 
   public static int file_write (Context context, String filename, byte [] buf) {
-    try {                                                               // File /data/data/ca.yyx.hu/hu.log contains a path separator
+    try {                                                               // File /data/data/gb.xxy.hr/hu.log contains a path separator
       FileOutputStream fos = context.openFileOutput (filename, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
                                                                         // Create/open file for writing
       fos.write (buf);                                                  // Copy to file
@@ -420,7 +420,7 @@ public final class hu_uti  {
 
     // Strings:
 
-  public static String str_usb_perm     = "ca.yyx.hu.ACTION_USB_DEVICE_PERMISSION";
+  public static String str_usb_perm     = "gb.xxy.hr.ACTION_USB_DEVICE_PERMISSION";
 
   public static String str_MAN = "Android";//"Mike";                    // Manufacturer
   public static String str_MOD = "Android Auto";//"Android Open Automotive Protocol"  // Model
@@ -618,56 +618,6 @@ public final class hu_uti  {
   }
 
 
-/*
-  void device_id_get () {
-
-    if (! BuildConfig.DEBUG)
-      return;
-
-    // ANDROID_ID and TelephonyManager.getDeviceId()
-    String android_id = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
-    hu_uti.logd ("android_id: " + android_id);                         // android_id: c5da68763daf5900
-
-    //UUID deviceUuid = new UUID(androidId.hashCode(), ((long)tmDevice.hashCode() << 32) | tmSerial.hashCode());
-    //String deviceId = deviceUuid.toString();
-
-    android.bluetooth.BluetoothAdapter m_BluetoothAdapter =  	android.bluetooth.BluetoothAdapter.getDefaultAdapter(); 
-    String bluetooth_add = m_BluetoothAdapter.getAddress();
-    hu_uti.logd ("bluetooth_add: " + bluetooth_add);                   // bluetooth_add: B4:CE:F6:34:49:CD
-
-    android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) this.getSystemService (Context.WIFI_SERVICE);
-    String wifi_mac_address = "";
-    if (wm == null)
-      hu_uti.loge ("wm: " + wm);
-    else
-      wifi_mac_address = wm.getConnectionInfo ().getMacAddress ();
-    hu_uti.logd ("wifi_mac_address: " + wifi_mac_address);             // On some devices, it's not available when Wi-Fi is turned off
-
-    android.telephony.TelephonyManager tm = (android.telephony.TelephonyManager) this.getSystemService (Context.TELEPHONY_SERVICE);
-    String tmdi = tm.getDeviceId ();
-    hu_uti.logd ("tmdi: " + tmdi);                                     // tmdi: null
-    String sim_serial = tm.getSimSerialNumber ();
-    hu_uti.logd ("sim_serial: " + sim_serial);                         // sim_serial: null
-
-    String serial = "";
-    try {
-      serial = android.os.Build.class.getField ("SERIAL").get (null).toString ();
-      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
-    }
-    catch (Throwable t) {
-      hu_uti.loge ("Throwable t: " + t);
-    }
-    try {
-      Class<?> c = Class.forName ("android.os.SystemProperties");
-      java.lang.reflect.Method get = c.getMethod ("get", String.class);
-      serial = (String) get.invoke (c, "ro.serialno");
-      hu_uti.logd ("serial: " + serial);                               // serial: HT4A1JT00958
-    }
-    catch (Throwable t) {
-      hu_uti.loge ("Throwable t: " + t);
-    }
-  }
-*/
 
 
 }

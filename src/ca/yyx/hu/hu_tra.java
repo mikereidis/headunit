@@ -1,7 +1,7 @@
 
     // Headunit app Transport: USB / Wifi
 
-package ca.yyx.hu;
+package gb.xxy.hr;
 
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -45,7 +45,7 @@ public class hu_tra {
   public  static final int AA_CH_AU2 = 6;
   private static final int AA_CH_MIC = 7;
   private static final int AA_CH_MAX = 7;
-
+ 
 
   public hu_tra (hu_act hu_act) {
     m_hu_act = hu_act;
@@ -60,7 +60,7 @@ public class hu_tra {
     System.loadLibrary ("hu_jni");
   }
 
-  private static native int native_aa_cmd         (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf);
+  private static native int native_aa_cmd         (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf, String myip_string, int transport_audio);
 
 
 /*
@@ -131,13 +131,13 @@ Internal classes:
         //synchronized (this) {
 
           if (test_rdy && test_len > 0 && test_buf != null) {
-            ret = aa_cmd_send (test_len, test_buf, 0, null);            // Send test command
+            ret = aa_cmd_send (test_len, test_buf, 0, null,"",true);            // Send test command
             test_rdy = false;
           }
 
 
           if (touch_sync && ! m_stopping && new_touch && len_touch > 0 && ba_touch != null) {
-            ret = aa_cmd_send (len_touch, ba_touch, 0, null);           // Send touch event
+            ret = aa_cmd_send (len_touch, ba_touch, 0, null,"",true);           // Send touch event
             ba_touch = null;
             new_touch = false;
 //            hu_uti.ms_sleep (1);
@@ -168,7 +168,7 @@ Internal classes:
               ba_mic [14 + ctr] = mic_audio_buf [ctr];
 
             //hu_uti.hex_dump ("MIC: ", ba_mic, 64);
-            ret = aa_cmd_send (14 + mic_audio_len, ba_mic, 0, null);    // Send mic audio
+            ret = aa_cmd_send (14 + mic_audio_len, ba_mic, 0, null,"",true);    // Send mic audio
 
           }
           else if (mic_audio_len > 0)
@@ -176,7 +176,7 @@ Internal classes:
         }
 //hu_uti.loge ("3");
         if (! m_stopping && ret >= 0)
-          ret = aa_cmd_send (0, null, 0, null);                         // Null message to just poll
+          ret = aa_cmd_send (0, null, 0, null,"",true);                         // Null message to just poll
         if (ret < 0)
           m_stopping = true;
 //hu_uti.loge ("4");
@@ -195,8 +195,8 @@ Internal classes:
       m_stopping = true;                                                // Terminate thread
     }
   }
-
-  public int jni_aap_start () {                                         // Start JNI Android Auto Protocol and Main Thread. Called only by usb_attach_handler(), usb_force() & hu_act.wifi_long_start()
+//We have to pass the IP and the audio flag setting from Javas to C somehow..., start here.
+  public int jni_aap_start (String myip_string, boolean transport_audio) {                                         // Start JNI Android Auto Protocol and Main Thread. Called only by usb_attach_handler(), usb_force() & hu_act.wifi_long_start()
 
     if (m_hu_act.disable_video_started_set)
       m_hu_act.ui_video_started_set (true);                             // Enable video/disable log view
@@ -204,7 +204,7 @@ Internal classes:
     byte [] cmd_buf = {121, -127, 2};                                   // Start Request w/ m_ep_in_addr, m_ep_out_addr
     cmd_buf [1] = (byte) m_ep_in_addr;
     cmd_buf [2] = (byte) m_ep_out_addr;
-    int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null);           // Send: Start USB & AA
+    int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null,myip_string, transport_audio);           // Send: Start USB & AA
 
     if (ret == 0) {                                                     // If started OK...
       hu_uti.logd ("aa_cmd_send ret: " + ret);
@@ -220,7 +220,7 @@ Internal classes:
   private int byebye_send () {                                          // Send Byebye request. Called only by transport_stop (), tra_thread:run()
     hu_uti.logd ("");
     byte [] cmd_buf = {AA_CH_CTR, 0x0b, 0, 0, 0, 0x0f, 0x08, 0};          // Byebye Request:  000b0004000f0800  00 0b 00 04 00 0f 08 00
-    int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null);           // Send
+    int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null,"",true);           // Send
     hu_uti.ms_sleep (100);                                              // Wait a bit for response
     return (ret);
   }
@@ -228,7 +228,7 @@ Internal classes:
   private byte [] fixed_cmd_buf = new byte [256];
   private byte [] fixed_res_buf = new byte [65536 * 16];
                                                                         // Send AA packet/HU command/mic audio AND/OR receive video/output audio/audio notifications
-  private int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf) {
+  private int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf, String myip_string, boolean transport_audio) {
     //synchronized (this) {
 
     if (cmd_buf == null || cmd_len <= 0) {
@@ -239,8 +239,9 @@ Internal classes:
       res_buf = fixed_res_buf;//new byte [65536 * 16];  // Seen up to 151K so far; leave at 1 megabyte
       res_len = res_buf.length;
     }
-
-    int ret = native_aa_cmd (cmd_len, cmd_buf, res_len, res_buf);       // Send a command (or null command)
+	int trans_aud=0;
+	if (transport_audio) {trans_aud=1;}
+    int ret = native_aa_cmd (cmd_len, cmd_buf, res_len, res_buf, myip_string, trans_aud);       // Send a command (or null command)
 
     if (ret == 1) {                                                     // If mic stop...
       hu_uti.logd ("Microphone Stop");
@@ -309,16 +310,6 @@ Internal classes:
       //hu_uti.loge ("AFTER  hu_uti.ms_sleep (50);");
     }
 
-    //synchronized (this) {
-  /*  if (action == 2) {
-        long this_move_ms = hu_uti.tmr_ms_get ();
-        if (last_move_ms + 50 > this_move_ms) {
-          hu_uti.loge ("Dropping motion this_move_ms: " + this_move_ms + "  last_move_ms: " + last_move_ms);
-          return;
-        }
-        last_move_ms = this_move_ms;
-      }*/
-
 
       ba_touch = new byte [] {AA_CH_TOU, 0x0b, 0x00, 0x00, -128, 0x01,   0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0, 0, 0,    0x1a, 0x0e,   0x0a, 0x08,   0x08, 0x2e, 0,   0x10, 0x2b, 0,   0x18, 0x00,   0x10, 0x00,   0x18, 0x00};
 
@@ -364,7 +355,7 @@ Internal classes:
 //
       int ret = 0;
       if (! touch_sync) {                                               // If allow sending from different thread
-        ret = aa_cmd_send (idx, ba_touch, 0, null);                     // Send directly
+        ret = aa_cmd_send (idx, ba_touch, 0, null,"",true);                     // Send directly
         return;
       }
 
@@ -421,14 +412,7 @@ Internal classes:
       }
       else if (device_list != null && device_list.size () > 0) {
         for (UsbDevice device : device_list.values ()) {
-/*
-          if (dev_class == 0 && dev_sclass == 0 && dev_proto == 0) {
-            if (is_android (dev_vend_id) ||
-                dev_man.startsWith ("HTC") || dev_man.startsWith ("MOTO") || dev_man.startsWith ("SONY") || dev_man.startsWith ("SAM") || dev_man.startsWith ("ASUS") || dev_man.startsWith ("SONY") ||
-                dev_man.startsWith ("ANDROID") || dev_man.startsWith ("GOOG") ||
-                dev_prod.startsWith ("NEXUS") || dev_prod.startsWith ("ANDROID") || dev_prod.startsWith ("GOOG") || dev_prod.startsWith ("XPERIA") || dev_prod.startsWith ("GT-") ||
-                dev_prod.startsWith ("ONE") || dev_prod.startsWith ("MOTO") || dev_prod.startsWith ("LT"))
-*/
+
               if (! usb_attach_handler (device, true))                        // Handle as NEW attached device
                 ret --;   // Reduce number of devices returned.
 //          }
@@ -501,10 +485,7 @@ Internal classes:
 
     int dev_vend_id = device.getVendorId ();                            // mVendorId=2996               HTC
     int dev_prod_id = device.getProductId ();                           // mProductId=1562              OneM8
-    //hu_uti.logd ("dev_vend_id: " + dev_vend_id + "  dev_prod_id: " + dev_prod_id);
-    // om7/xz0 internal: dev_name: /dev/bus/usb/001/002  dev_class: 0  dev_sclass: 0  dev_dev_id: 1002  dev_proto: 0  dev_vend_id: 1478  dev_prod_id: 36936     0x05c6 : 0x9048   Qualcomm
-    // gs3/no2 internal: dev_name: /dev/bus/usb/001/002  dev_class: 2  dev_sclass: 0  dev_dev_id: 1002  dev_proto: 0  dev_vend_id: 5401  dev_prod_id: 32        0x1519 : 0x0020   Comneon : HSIC Device
-
+ 
     if (dev_vend_id == 0x05c6 && dev_prod_id >= 0x9000)                 // Ignore Qualcomm OM7/XZ0 internal
       return (false);
     if (dev_vend_id == 0x1519)// && dev_prod_id == 0x020)               // Ignore Comneon  GS3/NO2 internal
@@ -528,7 +509,7 @@ Internal classes:
       hu_uti.logd ("Connected so start JNI");
       //hu_uti.ms_sleep (2000);                                         // Wait to settle
       //hu_uti.logd ("connected done sleep");
-      jni_aap_start ();                                                 // Start JNI Android Auto Protocol and Main Thread
+      jni_aap_start ("",true);                                                 // Start JNI Android Auto Protocol and Main Thread
     }
     else
       hu_uti.logd ("Not connected");
@@ -598,18 +579,7 @@ Internal classes:
 
     if (! usb_device_perm_get (device)) {                               // If we DON'T have permission to access the USB device...
 
-// BAD: 500, OK: 1000ms, ??   !!!! NEED A DELAY HERE or plugging USB with app running results in Attach quickly followed by detach
-//hu_uti.ms_sleep (1000);
-/* Also:
-07-10 17:53:51.770 D/             usb_connect(31496): Have Explicit USB Permission
-07-10 17:53:51.771 E/UsbManager(31496): exception in UsbManager.openDevice
-07-10 17:53:51.771 E/UsbManager(31496): java.lang.IllegalArgumentException: device /dev/bus/usb/001/002 does not exist or is restricted
-07-10 17:53:51.771 E/UsbManager(31496): 	at android.os.Parcel.readException(Parcel.java:1550)
-07-10 17:53:51.771 E/UsbManager(31496): 	at android.os.Parcel.readException(Parcel.java:1499)
-07-10 17:53:51.771 E/UsbManager(31496): 	at android.hardware.usb.IUsbManager$Stub$Proxy.openDevice(IUsbManager.java:373)
-07-10 17:53:51.771 E/UsbManager(31496): 	at android.hardware.usb.UsbManager.openDevice(UsbManager.java:265)
-07-10 17:53:51.771 E/UsbManager(31496): 	at ca.yyx.hu.hu_tra.usb_open(hu_tra.java:564)
-*/
+
 
       hu_uti.logd ("Request USB Permission");    // Request permission
       //a cat /system/etc/permissions/android.hardware.usb.host.xml|el
@@ -812,112 +782,7 @@ Internal classes:
   }
 
 
-/* Port 30515
 
-           <intent-filter>
-                <action android:name="android.nfc.action.NDEF_DISCOVERED"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <data android:mimeType="application/com.google.android.gms.car"/>
-            </intent-filter>
-
-*/
-
-/*
-
-07-09 02:23:35.027 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/002,mVendorId=5118,mProductId=14336,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=MUSHKIN,mProductName=MKNUFDMH16GB,mSerialNumber=070B3CD07A828030,mConfigurations=[
-07-09 02:23:35.027 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=128,mMaxPower=100,mInterfaces=[
-07-09 02:23:35.027 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=null,mClass=8,mSubclass=6,mProtocol=80,mEndpoints=[
-07-09 02:23:35.027 D/UsbHostManager(  572): UsbEndpoint[mAddress=129,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:23:35.027 D/UsbHostManager(  572): UsbEndpoint[mAddress=2,mAttributes=2,mMaxPacketSize=512,mInterval=0]]]]
-07-09 02:19:12.272 D/             screen_logd( 4548): dev_name: /dev/bus/usb/001/002  dev_class: 0  dev_sclass: 0  dev_dev_id: 1002  dev_proto: 0  dev_vend_id: 5118  dev_prod_id: 14336
-07-09 02:19:12.273 D/             screen_logd( 4548): dev_man: MUSHKIN  dev_prod: MKNUFDMH16GB  dev_ser: 070B3CD07A828030
-
-07-09 02:22:05.621 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/002,mVendorId=5118,mProductId=12544,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=        ,mProductName=Patriot Memory,mSerialNumber=07AB10013A50869B,mConfigurations=[
-07-09 02:22:05.621 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=128,mMaxPower=150,mInterfaces=[
-07-09 02:22:05.621 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=null,mClass=8,mSubclass=6,mProtocol=80,mEndpoints=[
-07-09 02:22:05.621 D/UsbHostManager(  572): UsbEndpoint[mAddress=129,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:22:05.621 D/UsbHostManager(  572): UsbEndpoint[mAddress=2,mAttributes=2,mMaxPacketSize=512,mInterval=0]]]]
-07-09 02:22:45.368 D/             screen_logd( 4755): dev_name: /dev/bus/usb/001/002  dev_class: 0  dev_sclass: 0  dev_dev_id: 1002  dev_proto: 0  dev_vend_id: 5118  dev_prod_id: 12544
-07-09 02:22:45.369 D/             screen_logd( 4755): dev_man:           dev_prod: PATRIOT MEMORY  dev_ser: 07AB10013A50869B
-
-07-09 02:24:29.420 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/002,mVendorId=4046,mProductId=57652,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=SEMC,mProductName=CCR-80,mSerialNumber=105207EC06FE662,mConfigurations=[
-07-09 02:24:29.420 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=128,mMaxPower=250,mInterfaces=[
-07-09 02:24:29.420 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=null,mClass=8,mSubclass=6,mProtocol=80,mEndpoints=[
-07-09 02:24:29.420 D/UsbHostManager(  572): UsbEndpoint[mAddress=129,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:24:29.420 D/UsbHostManager(  572): UsbEndpoint[mAddress=2,mAttributes=2,mMaxPacketSize=512,mInterval=0]]]]
-07-09 02:24:51.014 D/             screen_logd( 4908): dev_name: /dev/bus/usb/001/002  dev_class: 0  dev_sclass: 0  dev_dev_id: 1002  dev_proto: 0  dev_vend_id: 4046  dev_prod_id: 57652
-07-09 02:24:51.014 D/             screen_logd( 4908): dev_man: SEMC  dev_prod: CCR-80  dev_ser: 105207EC06FE662
-
-
-07-09 02:27:43.824 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/002,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:43.824 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:43.824 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:43.824 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:43.824 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:43.824 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-07-09 02:27:46.495 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/003,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:46.495 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:46.495 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:46.495 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:46.495 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:46.495 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-07-09 02:27:47.199 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/004,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:47.199 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:47.199 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:47.199 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:47.199 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:47.199 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-07-09 02:27:47.765 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/005,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:47.765 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:47.765 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:47.765 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:47.765 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:47.765 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-07-09 02:27:48.655 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/006,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:48.655 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:48.655 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:48.655 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:48.655 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:48.655 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-07-09 02:27:50.365 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/007,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:27:50.365 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:27:50.365 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:27:50.365 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:50.365 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:27:50.365 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-
-
-07-09 02:32:47.085 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/002,mVendorId=1256,mProductId=26716,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=samsung,mProductName=GT-N7100,mSerialNumber=4df7da0f442fbf49,mConfigurations=[
-07-09 02:32:47.085 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=48,mInterfaces=[
-07-09 02:32:47.085 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-07-09 02:32:47.085 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:32:47.085 D/UsbHostManager(  572): UsbEndpoint[mAddress=4,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-07-09 02:32:47.085 D/UsbHostManager(  572): UsbEndpoint[mAddress=131,mAttributes=3,mMaxPacketSize=28,mInterval=6]]]]
-07-09 02:30:57.270 D/             screen_logd( 5293): dev_name: /dev/bus/usb/001/008  dev_class: 0  dev_sclass: 0  dev_dev_id: 1008  dev_proto: 0  dev_vend_id: 1256  dev_prod_id: 26716
-07-09 02:30:57.271 D/             screen_logd( 5293): dev_man: SAMSUNG  dev_prod: GT-N7100  dev_ser: 4DF7DA0F442FBF49
-
-
-07-09 02:34:29.308 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/003,mVendorId=2101,mProductId=34049,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=Action Star,mProductName=USB HID,mSerialNumber=null,mConfigurations=[
-07-09 02:34:29.308 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=10,mInterfaces=[
-07-09 02:34:29.308 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=null,mClass=3,mSubclass=1,mProtocol=1,mEndpoints=[
-07-09 02:34:29.308 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=3,mMaxPacketSize=8,mInterval=8]]]]
-
-07-09 02:34:30.575 D/UsbHostManager(  572): Added device UsbDevice[mName=/dev/bus/usb/001/005,mVendorId=2101,mProductId=34050,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=Action Star,mProductName=USB HID,mSerialNumber=null,mConfigurations=[
-07-09 02:34:30.575 D/UsbHostManager(  572): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=10,mInterfaces=[
-07-09 02:34:30.575 D/UsbHostManager(  572): UsbInterface[mId=0,mAlternateSetting=0,mName=null,mClass=3,mSubclass=1,mProtocol=1,mEndpoints=[
-07-09 02:34:30.575 D/UsbHostManager(  572): UsbEndpoint[mAddress=130,mAttributes=3,mMaxPacketSize=8,mInterval=8]]]]
-
-07-09 02:35:29.610 D/             screen_logd( 5557): dev_name: /dev/bus/usb/001/005  dev_class: 0  dev_sclass: 0  dev_dev_id: 1005  dev_proto: 0  dev_vend_id: 2101  dev_prod_id: 34050
-07-09 02:35:29.610 D/             screen_logd( 5557): dev_man: ACTION STAR  dev_prod: USB HID  dev_ser: 
-07-09 02:35:29.611 D/             screen_logd( 5557): dev_name: /dev/bus/usb/001/003  dev_class: 0  dev_sclass: 0  dev_dev_id: 1003  dev_proto: 0  dev_vend_id: 2101  dev_prod_id: 34049
-07-09 02:35:29.611 D/             screen_logd( 5557): dev_man: ACTION STAR  dev_prod: USB HID  dev_ser: 
-
-*/
 
   private static final int USB_PID_ACC_MIN     = 0x2D00;      // 11520   Product ID to use when in accessory mode without ADB
   private static final int USB_PID_ACC_MAX     = 0x2D05;
@@ -978,22 +843,7 @@ Internal classes:
       return (true);
     return (false);
   }
-/*
-06-15 00:16:38.838 D/                       d( 4777): Launched by USB connection event device: UsbDevice[mName=/dev/bus/usb/001/005,mVendorId=2996,mProductId=3877,mClass=0,mSubclass=0,mProtocol=0,mManufacturerName=HTC,mProductName=Android Phone,mSerialNumber=FA46RWM22264,mConfigurations=[
-06-15 00:16:38.838 D/                       d( 4777): UsbConfiguration[mId=1,mName=null,mAttributes=192,mMaxPower=250,mInterfaces=[
-06-15 00:16:38.838 D/                       d( 4777): UsbInterface[mId=0,mAlternateSetting=0,mName=MTP,mClass=6,mSubclass=1,mProtocol=1,mEndpoints=[
-06-15 00:16:38.838 D/                       d( 4777): UsbEndpoint[mAddress=129,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-06-15 00:16:38.838 D/                       d( 4777): UsbEndpoint[mAddress=1,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-06-15 00:16:38.838 D/                       d( 4777): UsbEndpoint[mAddress=130,mAttributes=3,mMaxPacketSize=28,mInterval=6]]
-06-15 00:16:38.838 D/                       d( 4777): UsbInterface[mId=1,mAlternateSetting=0,mName=null,mClass=255,mSubclass=255,mProtocol=0,mEndpoints=[
-06-15 00:16:38.838 D/                       d( 4777): UsbEndpoint[mAddress=131,mAttributes=2,mMaxPacketSize=512,mInterval=0]
-06-15 00:16:38.838 D/                       d( 4777): UsbEndpoint[mAddress=2,mAttributes=2,mMaxPacketSize=512,mInterval=1]]]]
-06-15 00:16:38.838 D/                       d( 4777): usb_attach_handler m_usb_connected: false
-06-15 00:16:38.838 D/                       d( 4777): Try connect
-06-15 00:16:38.838 D/                       d( 4777): usb_connect
-06-15 00:16:38.838 D/                       d( 4777): Have Implicit USB Permission m_autolaunched: true  perm: true
-06-15 00:16:38.838 D/                       d( 4777): Not connected
-*/
+
 
   private String usb_man_get (UsbDevice device) {                       // Use reflection to avoid ASUS tablet problem
     String ret = "";
@@ -1105,9 +955,12 @@ Internal classes:
   private int usb_list_num = 0;
   private String [] usb_list_name = new String [hu_act.PRESET_LEN_USB];
   private UsbDevice [] usb_list_device = new UsbDevice [hu_act.PRESET_LEN_USB];
-
-  public void usb_force () {                                            // Called only by hu_act:preset_select_lstnr:onClick()
-    if (m_usb_connected)
+ 
+   
+  
+ public void usb_force () {                                            // Called only by hu_act:preset_select_lstnr:onClick()
+    hu_uti.logd("forced usb");
+	if (m_usb_connected)
       return;
   
     if (hu_uti.su_installed_get ()) {
@@ -1117,7 +970,7 @@ Internal classes:
 
     m_ep_in_addr  = 255;
     m_ep_out_addr = 0;  // USB Force
-    jni_aap_start ();
+    jni_aap_start ("",true);
   }
 
   public void presets_select (int idx) {                                // Called only by hu_act:preset_select_lstnr:onClick()
@@ -1168,30 +1021,7 @@ Internal classes:
     }
   }
 
-/* Not used
-  private int usb_io (UsbEndpoint ep, byte [] buf, int len, int tmo) {
-    if (m_usb_dev_conn == null) {
-      hu_uti.loge ("m_usb_dev_conn: " + m_usb_dev_conn);
-      return (-1);
-    }
-    int ret = m_usb_dev_conn.bulkTransfer (ep, buf, len, tmo);          // This form good for API level 12+, IDX form 4.3+ only
-    if (ret < 0) {
-      hu_uti.loge ("Bulk transfer failed ret: " + ret);
-    }
-    hu_uti.logd ("Bulk transfer ret: " + ret);
-    return (ret);
-  }
 
-  private int usb_read (byte [] buf, int len) {
-    int ret = usb_io (m_usb_ep_in,  buf, len, 3000);                    // -1 or 0 = wait forever
-    return (ret);
-  }
-
-  private int usb_write (byte [] buf, int len) {
-    int ret = usb_io (m_usb_ep_out, buf, len, 1000);                    // 1 second timeout
-    return (ret);
-  }
-*/
 
 }
 
