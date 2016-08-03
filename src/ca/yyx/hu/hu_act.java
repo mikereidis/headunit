@@ -1,64 +1,4 @@
-/*
-
-pushd ~/b/android-sdk/extras/android/support/v7/appcompat
-android update lib-project -p . --target android-23
-ant release
-popd
-
-*/
-
-
-  // Headunit app Main Activity
-/*
-
-Start with USB plugged
-transport_start
-  usb_attach_handler
-    usb_connect
-
-1st Permission granted
-usb_receiver
-  usb_attach_handler
-    usb_connect
-      usb_open
-    -
-      acc_mode_switch
-      usb_disconnect
-
-Disconnect
-usb_receiver
-  usb_detach_handler
-
-Attached in ACC mode
-usb_receiver
-  usb_attach_handler
-    usb_connect
-
-2nd Permission granted
-usb_receiver
-  usb_attach_handler
-    usb_connect
-      usb_open
-    -
-      acc_mode_endpoints_set
-  -
-    jni_aap_start
-*/
-
-/* How to implement Android Open Accessory mode as a service:
-
-Copy the intent that you received when starting your activity that you use to launch the service, because the intent contains the details of the accessory that the ADK implementation needs.
-Then, in the service proceed to implement the rest of ADK exactly as before.
-
-if (intent.getAction().equals(USB_OAP_ATTACHED)) {
-    Intent i = new Intent(this, YourServiceName.class);
-    i.putExtras(intent);
-    startService(i);
-}
-
-
-*/
-package ca.yyx.hu;
+package gb.xxy.hr;
 
 import android.util.Log;
 import android.content.Context;
@@ -77,9 +17,7 @@ import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 
 
-//import android.net.wifi.p2p.WifiP2pManager;
 import android.net.wifi.p2p.*;
-//import android.net.wifi.p2p.WifiP2pManager.Channel;
 import android.net.wifi.p2p.WifiP2pManager.*;
 import java.net.ServerSocket;
 import android.os.AsyncTask;
@@ -94,6 +32,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
+import java.net.ConnectException;
 
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -154,6 +93,9 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
+import android.support.v4.app.Fragment;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 
 public class hu_act extends Activity          implements TextureView.SurfaceTextureListener {
 
@@ -232,6 +174,9 @@ Public for hu_tra:
 
     // Presets:
 
+  public static String myip="127.0.0.1";
+  public static boolean transport_audio=true;
+  
   private static final int PRESET_LEN_TOT = 16;
   private static final int PRESET_LEN_FIX = 11;
   public  static final int PRESET_LEN_USB = PRESET_LEN_TOT - PRESET_LEN_FIX;  // Room left over for USB entries
@@ -269,7 +214,7 @@ Public for hu_tra:
   private void screen_logd (final String str) {
     hu_uti.logd (str);
     //m_tv_log.append (str + "\n");       // android.view.ViewRootImpl$CalledFromWrongThreadException: Only the original thread that created a view hierarchy can touch its views.
-    tv_log_append (str + "\n");           // at ca.yyx.hu.hu_act.media_decode(hu_act.java:564)
+    tv_log_append (str + "\n");           // at gb.xxy.hr.hu_act.media_decode(hu_act.java:564)
   }
   private void screen_loge (final String str) {
     hu_uti.loge (str);
@@ -288,17 +233,16 @@ Public for hu_tra:
     "Test",
     "Self",
     "Wifi",
-    "NFC",
-
+    "WifiP2p",
     "Day",
     "Night",
     "Auto",
     "Hide",
     "SUsb",
-
     "RUsb",
-
-    "","","","",""
+	"Settings",
+	"",
+    "","",""
   };
 
   private DrawerLayout  m_dl_drawer;
@@ -376,17 +320,6 @@ Public for hu_tra:
     m_dl_drawer.openDrawer (Gravity.START);
 
 
-    //mTitle = getTitle ();
-/*
-    mNavigationDrawerFragment = (NavigationDrawerFragment) getSupportFragmentManager ().findFragmentById (R.id.navigation_drawer);
-
-    if (mNavigationDrawerFragment != null)                              // If OK... Setup drawer
-      mNavigationDrawerFragment.setUp (R.id.navigation_drawer, (DrawerLayout) findViewById (R.id.drawer_layout));
-    else
-      hu_uti.loge ("mNavigationDrawerFragment == null");
-*/
-
-
     try {
       lite_clr = Color.parseColor ("#ffffffff");                        // lite like PS
       dark_clr = Color.parseColor ("#ffa3a3a3");                        // grey like RT
@@ -457,16 +390,17 @@ Public for hu_tra:
 
     msg_display ();
 
-    hu_uti.file_delete ("/data/data/ca.yyx.hu/files/nfc_wifi");
+    /* Currently SU doesn't look to be required at all, NFC defently not since we use TCP connection 
+	hu_uti.file_delete ("/data/data/gb.xxy.hr/files/nfc_wifi");
 
       // Do "su" stuff before starting car mode
     if (hu_uti.file_get ("/sdcard/hu_selinux_disable"))
-      hu_uti.sys_run ("setenforce 0 1>/dev/null 2>/dev/null ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null ; rm -f /data/data/ca.yyx.hu/files/nfc_wifi 1>/dev/null 2>/dev/null", true);
+      hu_uti.sys_run ("setenforce 0 1>/dev/null 2>/dev/null ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null ; rm -f /data/data/gb.xxy.hr/files/nfc_wifi 1>/dev/null 2>/dev/null", true);
     else if (! hu_uti.file_get ("/sdcard/hu_su_disable"))
-      hu_uti.sys_run ("chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null ; rm -f /data/data/ca.yyx.hu/files/nfc_wifi 1>/dev/null 2>/dev/null", true);
+      hu_uti.sys_run ("chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null ; rm -f /data/data/gb.xxy.hr/files/nfc_wifi 1>/dev/null 2>/dev/null", true);
     else
-      hu_uti.sys_run ("rm -f /data/data/ca.yyx.hu/files/nfc_wifi 1>/dev/null 2>/dev/null", false);
-
+      hu_uti.sys_run ("rm -f /data/data/gb.xxy.hr/files/nfc_wifi 1>/dev/null 2>/dev/null", false);
+*/
 
     m_hu_tra = new hu_tra (this);                                       // Start USB/SSL/AAP Transport
     if (m_hu_tra != null) {
@@ -477,6 +411,7 @@ Public for hu_tra:
         ret = m_hu_tra.transport_start (intent);
       if (ret <= 0) {                                                   // If no USB devices...
 
+	  //Need to move car mode to option as well. Is it needed at all?
         if (! hu_uti.file_get ("/sdcard/hu_nocarm") && ! starting_car_mode) {  // Else if have at least 1 USB device and we are not starting yet car mode...
           hu_uti.logd ("Before car_mode_start()");
           starting_car_mode = true;
@@ -487,10 +422,7 @@ Public for hu_tra:
           hu_uti.logd ("Starting car mode or disabled so don't call car_mode_start()");
           starting_car_mode = false;
         }
-/*
-        wifi_init ();
-        wifi_start ();
-//*/
+
       }
 
 
@@ -499,34 +431,24 @@ Public for hu_tra:
     wifi_resume (); // Does nothing now
 
     hu_uti.logd ("end");
+	
+	
   }
 
   private static boolean starting_car_mode = false;
 
-/*
-07-12 05:38:27.509 D/             arr_sys_run(17106): su: false  line: am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity
-07-12 05:38:27.767 D/AndroidRuntime(17122): >>>>>> START com.android.internal.os.RuntimeInit uid 10090 <<<<<<
-07-12 05:38:27.771 D/AndroidRuntime(17122): CheckJNI is OFF
-07-12 05:38:27.804 D/ICU     (17122): No timezone override file found: /data/misc/zoneinfo/current/icu/icu_tzdata.dat
-07-12 05:38:27.838 I/Radio-JNI(17122): register_android_hardware_Radio DONE
-07-12 05:38:27.866 D/AndroidRuntime(17122): Calling main entry com.android.commands.am.Am
-07-12 05:38:27.871 W/ActivityManager(  625): Permission Denial: startActivity asks to run as user -2 but is calling from user 0; this requires android.permission.INTERACT_ACROSS_USERS_FULL
-07-12 05:38:27.879 I/art     (17122): System.exit called, status: 1
-07-12 05:38:27.879 I/AndroidRuntime(17122): VM exiting with result code 1.
-07-12 05:38:27.905 W/             arr_sys_run(17106): cmds [0]: am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity  exit_val: 1
-*/
 
   private void msg_display () {
-    String intro1_str = "HEADUNIT for Android Auto (tm)\n" +
+    String intro1_str = "HEADUNIT Reloaded for Android Auto (tm) -in Memory of Michael A. Reid -\n" +
       "You accept all liability for any reason by using, distributing, doing, or not doing anything else in respect of this software.\n" +
       "This software is experimental and may be distracting. Use it only for testing at this time. Do NOT use this software while operating a vehicle of any sort.\n";
     screen_logd (intro1_str);
 
     String intro2_str = "";
     if (this.getPackageManager ().hasSystemFeature (android.content.pm.PackageManager.FEATURE_USB_HOST))
-      intro2_str = "This device/ROM must support USB Host Mode\n";
+      intro2_str = "This device/ROM must support USB Host Mode, or you need to use a Wifi Connection\n";
     else
-      intro2_str = "This device/ROM must support USB Host Mode AND IT DOES NOT APPEAR TO BE SUPPORTED !!!!!!!!!!\n";
+      intro2_str = "This device/ROM doesn't seem to support USB HOST MODE!!! You might be limited to Wifi connection mode only.\n";
     screen_logd (intro2_str);
 
     String intro3_str = "" +
@@ -535,13 +457,14 @@ Public for hu_tra:
       "Connect this device to USB OTG cable\n" +
       "Connect USB OTG cable to regular phone USB cable\n" +
       "Connect regular USB cable to Android 5+ device running Google Android Auto app\n" +
-      "Start this Headunit app\n" +
       "Respond OK to prompts\n" +
       "First Time with Android Auto check phone screen to see if apps need to be updated or prompts accepted\n" +
       "If success, this device screen will show Android Auto User Interface and other device screen should go dark\n" +
       "\n" +
       "A LOT of USB and OTG cables will not work\n" +
       "It can be tricky to get working the first time\n" +
+	  "For Wifi, set up a tethering on your phone, open Android Auto on the phone, tap 20 times the header of the AA app.\n"+
+	  "Once you gain developer status in the AA app, select 'Start Head Unit Server' and connect the tablet to the tethered Wifi\n"+
       "\n";
     screen_logd (intro3_str);
   }
@@ -553,6 +476,7 @@ Public for hu_tra:
   public void onStart () {
     super.onStart ();
     hu_uti.logd ("--- ");
+	
   }
 
   @Override
@@ -560,12 +484,13 @@ Public for hu_tra:
     super.onResume ();
     hu_uti.logd ("--- ");
     //wifi_resume ();                                                   // Register the broadcast receiver with the intent values to be matched
+  
   }
 
   @Override
-  protected void onNewIntent (Intent intent) {    // am start -n ca.yyx.hu/.hu_act -a "send" -e data 040b000000130801       #AUDIO_FOCUS_STATE_GAIN
-                                                  // am start -n ca.yyx.hu/.hu_act -a "send" -e data 000b0000000f0800       Byebye request
-                                                  // am start -n ca.yyx.hu/.hu_act -a "send" -e data 020b0000800808021001   VideoFocus lost focusState=0 unsolicited=true
+  protected void onNewIntent (Intent intent) {    // am start -n gb.xxy.hr/.hu_act -a "send" -e data 040b000000130801       #AUDIO_FOCUS_STATE_GAIN
+                                                  // am start -n gb.xxy.hr/.hu_act -a "send" -e data 000b0000000f0800       Byebye request
+                                                  // am start -n gb.xxy.hr/.hu_act -a "send" -e data 020b0000800808021001   VideoFocus lost focusState=0 unsolicited=true
     super.onNewIntent (intent);
     hu_uti.logd ("--- intent: " + intent);
 
@@ -574,7 +499,7 @@ Public for hu_tra:
       hu_uti.loge ("action == null");
       return;
     }
-                                                                        // --- intent: Intent { act=android.hardware.usb.action.USB_DEVICE_ATTACHED flg=0x10000000 cmp=ca.yyx.hu/.hu_act (has extras) }
+                                                                        // --- intent: Intent { act=android.hardware.usb.action.USB_DEVICE_ATTACHED flg=0x10000000 cmp=gb.xxy.hr/.hu_act (has extras) }
     if (! action.equals ("send")) {                                     // If this is NOT our "fm.a2d.s2.send" Intent...
       //hu_uti.logd ("action: " + action);                              // action: android.hardware.usb.action.USB_DEVICE_ATTACHED
       return;
@@ -599,26 +524,6 @@ Public for hu_tra:
 
     m_hu_tra.test_send (send_buf, send_buf.length);
 
-/*
-    String [] str_vals = extras.getStringArray ("data");
-    if (str_vals == null) {
-      hu_uti.loge ("str_vals == null");
-      return;
-    }
-    int size = str_vals.length;
-    if (size <= 0) {
-      hu_uti.loge ("size <= 0");
-      return;
-    }
-    int idx = 0;
-    for (idx = 0; idx < size; idx ++) {
-      String str = str_vals [idx];
-      //byte [] send_buf = new byte [size];
-      byte [] send_buf = hu_uti.hexstr_to_ba (str);
-      String str2 = hu_uti.ba_to_hexstr (send_buf);
-      hu_uti.logd ("idx: " + idx + "  str: " + str + "  str2: " + str2);
-    }
-*/
   }
 
 
@@ -626,7 +531,6 @@ Public for hu_tra:
   protected void onPause () {
     super.onPause ();
     hu_uti.logd ("--- ");
-    //wifi_pause ();                                                    // Unregister the broadcast receiver
   }
 
   @Override
@@ -659,8 +563,9 @@ Public for hu_tra:
 
     all_stop ();
 
-    if (! hu_uti.file_get ("/sdcard/hu_usbr_disable"))
-      hu_uti.sys_run ("/data/data/ca.yyx.hu/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
+// No need of reseting the USB
+//    if (! hu_uti.file_get ("/sdcard/hu_usbr_disable"))
+//      hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
 
     if (! starting_car_mode)
       android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
@@ -729,7 +634,7 @@ Public for hu_tra:
       else if (idx == 3)
         name = "Wifi";
       else if (idx == 4)
-        name = "NFC";
+        name = "WifiP2p";
       else if (idx == 5)
         name = "Day";
       else if (idx == 6)
@@ -741,7 +646,9 @@ Public for hu_tra:
       else if (idx == 9)
         name = "SUsb";
       else if (idx == 10)
-        name = "RUsb";
+        name = "RUsb";    
+ 	else if (idx == 11)
+        name = "Settings";
 
       m_preset_name [idx] = name;
       m_preset_tv [idx].setText (name);
@@ -768,31 +675,37 @@ Public for hu_tra:
     }
     else if (idx == 1)                                                  // If Test...
       video_test_start (false);
-    else if (idx == 2 || idx == 3) {                                    // If Self or Wifi...
-      if (idx == 2) {                                                   // If Self...
-        if (wifi_direct) {
-          hu_uti.sys_run ("mkdir /data/data/ca.yyx.hu/files/ 1>/dev/null 2>/dev/null ; touch /data/data/ca.yyx.hu/files/nfc_wifi 1>/dev/null 2>/dev/null", false);
-          hu_uti.file_create ("/data/data/ca.yyx.hu/files/nfc_wifi"); // Directory must be created first so this wasn't working
-        }
-        Toast.makeText (m_context, "Starting Self - Please Wait... :)", Toast.LENGTH_LONG).show ();
-      }
-      else {
-        hu_uti.sys_run ("rm -f /data/data/ca.yyx.hu/files/nfc_wifi 1>/dev/null 2>/dev/null", false);
-        hu_uti.file_delete ("/data/data/ca.yyx.hu/files/nfc_wifi");
-        Toast.makeText (m_context, "Starting Wifi - Please Wait... :)", Toast.LENGTH_LONG).show ();
-      }
-      //car_mode_start ();
-      sys_ui_show ();
-
-      //if (idx != 2 || ! wifi_direct) {
-        wifi_init ();
-      //}
-
-      wifi_start ();
-    }
-    else if (idx == 4)                                            // NFC
-      hu_uti.sys_run ("am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity -f 32768 1>/dev/null 2>/dev/null", true);
-    else if (idx == 5)  // Day
+    else if (idx == 2) 
+	{
+		Toast.makeText (m_context, "Starting Self - Please Wait... :)", Toast.LENGTH_LONG).show ();  
+		  sys_ui_show ();
+	
+		   transport_audio=false;			
+		   wifi_start (2);
+	}
+      else if (idx == 3) 
+	{
+		Toast.makeText (m_context, "Starting Wifi - Please Wait... :)", Toast.LENGTH_LONG).show ();  
+		sys_ui_show ();
+		
+			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+			myip = SP.getString("wifiip", "192.168.43.1");
+			transport_audio=SP.getBoolean("phoneaudio",false);
+		   wifi_start (3);
+	
+		
+	}
+	  else if (idx == 4)
+	  {
+			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+			transport_audio=SP.getBoolean("phoneaudio",false);
+		Toast.makeText (m_context, "Starting P2PWifi - Please Wait... :)", Toast.LENGTH_LONG).show ();  
+		  sys_ui_show ();
+		  wifi_init ();
+		   wifi_start (4);
+	  }
+  
+     else if (idx == 5)  // Day
       m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_NO);
     else if (idx == 6)
       m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_YES);
@@ -804,7 +717,12 @@ Public for hu_tra:
     else if (idx == 9)
       m_hu_tra.usb_force ();
     else if (idx == 10)
-      hu_uti.sys_run ("/data/data/ca.yyx.hu/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
+      hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
+    else if (idx == 11) 
+	{
+				Intent i = new Intent(this, hu_pref.class);
+                startActivity(i);
+	}
     else if (idx >= PRESET_LEN_FIX && idx <= PRESET_LEN_TOT - 1)
       m_hu_tra.presets_select (idx - PRESET_LEN_FIX);
     return;
@@ -832,7 +750,7 @@ Public for hu_tra:
   private /*static*/ boolean m_tcp_connected = false;
 
   private boolean async_wifi_start = true;//false;
-  private void wifi_start () {                                          // BlocksED !!!!
+  private void wifi_start (int con_type) {                                          // BlocksED !!!!
     if (m_hu_tra != null) {
 
       m_tcp_connected = false;
@@ -840,7 +758,7 @@ Public for hu_tra:
       ui_video_started_set (true);                                      // Enable video/disable log view
 
       if (! async_wifi_start) {
-        wifi_long_start ();
+        wifi_long_start (con_type);
         return;
       }
 
@@ -851,7 +769,7 @@ Public for hu_tra:
     AsyncTask at = new wifi_start_task (this);
     hu_uti.logd ("at: " + at);
     if (at != null)
-      at.execute ();//obj);
+      at.execute (con_type);//obj);
     }
   }
 
@@ -869,46 +787,14 @@ Public for hu_tra:
     @Override
     protected Object doInBackground (Object... params) {//(Void... params) {// (Params... p) {//Void... v) {//Void... params) {
     //protected String doInBackground (Object... obj) {//String... str) {// params) {
-
+	int con_type = (Integer) params[0]; 
       try {
         hu_uti.logd ("params: " + params);
 
-        wifi_long_start ();
+        wifi_long_start (con_type);
         hu_uti.logd ("wifi_long_start done");
 
-/*
-        ServerSocket serverSocket = new ServerSocket (30515);//8888);   // Create a server socket
-        hu_uti.logd ("new serverSocket: " + serverSocket);
 
-        Socket client = serverSocket.accept ();                         // Block waiting for client connections
-        hu_uti.logd ("serverSocket.accept client: " + client);
-
-        // If this code is reached, a client has connected
-
-        InputStream  inp_str = client.getInputStream ();
-        OutputStream out_str = client.getOutputStream ();
-
-        byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 1};                    // Version Request
-        int ret = hu_aap_usb_set (0, 3, 1, vr_buf, vr_buf.length);
-        //ret = hu_aap_usb_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
-
-        out_str.write (vr_buf, 0, vr_buf.length);
-        out_str.flush ();
-        hu_uti.logd ("version request sent to Wifi output");
-
-        hu_uti.ms_sleep (200);
-        byte in_buf [] = new byte [65536];
-        int bytes_read = inp_str.read (in_buf, 0, 65536);
-        hu_uti.logd ("version response received from Wifi input bytes_read: " + bytes_read);
-        if (bytes_read > 0) {
-          hu_uti.hex_dump ("AA WiFi: ", in_buf, bytes_read);
-        }
-
-        out_str.close ();
-        inp_str.close ();
-
-        serverSocket.close();
-*/
         return (null);// f.getAbsolutePath();
       }
       catch (Throwable e) {//IOException e) {
@@ -921,25 +807,16 @@ Public for hu_tra:
     @Override
     protected void onPostExecute (Object result) {//String result) {
       hu_uti.logd ("result: " + result);
-//      if (result != null) {
-//        //statusText.setText("File copied - " + result);
-//        Intent intent = new Intent();
-//        intent.setAction(android.content.Intent.ACTION_VIEW);
-//        intent.setDataAndType(Uri.parse("file://" + result), "image/*");
-//        context.startActivity(intent);
-//      }
+
     }
   }
 
 
-    //Intent intent = new Intent (this, hu_act.class);
-    //intent.setFlags (Intent.FLAG_ACTIVITY_CLEAR_TASK);  // Intent.FLAG_ACTIVITY_NEW_TASK | 
-    //startActivity (intent);
 
 
   private static boolean wifi_starting = false;
 
-  private void wifi_long_start () {
+  private void wifi_long_start (int con_type) {
 
       if (wifi_starting) {
         hu_uti.loge ("wifi_starting: " + wifi_starting);
@@ -951,8 +828,16 @@ Public for hu_tra:
 //wifi_init ();
 
       //hu_uti.sys_run ("am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity -f 32768 & ", true);
-
-      int ret = m_hu_tra.jni_aap_start ();                              // Start JNI Android Auto Protocol and Main Thread
+	int ret = -1;
+	if (con_type==2) {
+		
+		m_hu_tra.jni_aap_start ("127.0.0.1",false);     
+	}
+	else if (con_type == 3) {
+		m_hu_tra.jni_aap_start (myip,transport_audio);
+	}
+	else {
+	 ret = m_hu_tra.jni_aap_start ("192.168.49.122",transport_audio);           }                   // Start JNI Android Auto Protocol and Main Thread
       hu_uti.logd ("jni_aap_start() ret: " + ret);
 
       m_tcp_connected = true;
@@ -1003,9 +888,6 @@ Public for hu_tra:
       v.startAnimation (m_ani_button);
   }
 
-// pm grant org.jtb.alogcat.donate android.permission.READ_LOGS
-// chmod 04755 /system/bin/logcat
-// logcat k9:V *:S AndroidRuntime:E
 
   private int click_ctr = 0;
   private long click_start_ms = 0;
@@ -1049,20 +931,7 @@ Public for hu_tra:
   };
 
 
-    // Video Test:
 
-/*
-  private void old_video_test_start (final boolean started) {
-    class vs_task implements Runnable {                                 // !!!! Doesn't work !!!!
-      boolean started;
-      vs_task (boolean s) { started = s; }
-        public void run() {
-          video_test (started);
-        }
-    }
-    runOnUiThread (new vs_task (started));
-  }
-*/
 
 //*
   private void video_test_start (final boolean started) {
@@ -1115,7 +984,7 @@ Public for hu_tra:
     if (h264_full_filename == null)
       h264_full_filename = hu_uti.res_file_create (m_context, R.raw.husam_h264, "husam.h264");
     if (h264_full_filename == null)
-      h264_full_filename = "/data/data/ca.yyx.hu/files/husam.h264";
+      h264_full_filename = "/data/data/gb.xxy.hr/files/husam.h264";
 
     byte [] ba = hu_uti.file_read_16m (h264_full_filename);             // Read entire file, up to 16 MB to byte array ba
     ByteBuffer bb;// = ByteBuffer.wrap (ba);
@@ -1485,37 +1354,6 @@ Public for hu_tra:
       hu_uti.loge ("index: " + index);
   }
 
-/*
-  private int camcorder_profile_get () {                                // Get the recording profile to log     Always shows support for all
-    //CamcorderProfile profile = null;
-    int prof = 0;
-
-    if (CamcorderProfile.hasProfile (CamcorderProfile.QUALITY_1080P)) {
-      if (prof < 1080)
-        prof = 1080;
-      hu_uti.logd ("1080p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_1080P);
-    }
-    if (CamcorderProfile.hasProfile (CamcorderProfile.QUALITY_720P)) {
-      if (prof < 720)
-        prof = 720;
-      hu_uti.logd (" 720p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_720P);
-    }
-    if (CamcorderProfile.hasProfile (CamcorderProfile.QUALITY_480P)) {
-      if (prof < 480)
-        prof = 480;
-      hu_uti.logd (" 480p");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_480P);
-    }
-    if (CamcorderProfile.hasProfile (CamcorderProfile.QUALITY_HIGH)) {
-      if (prof < 240)
-        prof = 240; // !!!!!!!! ??
-      hu_uti.logd ("HIGH");//profile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
-    }
-    //hu_uti.loge ("Unknown");//
-
-    //hu_uti.loge ("profile: " + profile);
-    return (prof);
-  }
-*/
 
     // Video recording:
 //*
@@ -1612,7 +1450,7 @@ Public for hu_tra:
       }
 //*/
       try {
-        if (audio_record_fos == null)     // -> /data/data/ca.yyx.hu/files/hurec.pcm
+        if (audio_record_fos == null)     // -> /data/data/gb.xxy.hr/files/hurec.pcm
           audio_record_fos = this.openFileOutput ("hurec.pcm", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
         hu_uti.logw ("audio_record_fos: " + audio_record_fos);
       }
@@ -2015,7 +1853,7 @@ out_audiotrack.flush ();
     // Debug logs Email:
 
   private boolean new_logs = true;
-  String logfile = "/sdcard/hulog.txt";//"/data/data/ca.yyx.hu/hu.txt";
+  String logfile = "/sdcard/hulog.txt";//"/data/data/gb.xxy.hr/hu.txt";
 
   String cmd_build (String cmd) {
     String cmd_head = " ; ";
@@ -2026,7 +1864,7 @@ out_audiotrack.flush ();
   String new_logs_cmd_get () {
     String cmd  = "rm -f " + logfile;
 
-    //cmd += cmd_build ("cat /data/data/ca.yyx.hu/shared_prefs/prefs.xml");
+    //cmd += cmd_build ("cat /data/data/gb.xxy.hr/shared_prefs/prefs.xml");
     cmd += cmd_build ("id");
     cmd += cmd_build ("uname -a");
     cmd += cmd_build ("getprop");
@@ -2044,7 +1882,7 @@ out_audiotrack.flush ();
 
     cmd += cmd_build ("logcat -d -v time");
 
-    cmd += cmd_build ("ls -lR /data/data/ca.yyx.hu/ /data/data/ca.yyx.hu/lib/ /init* /sbin/ /firmware/ /data/anr/ /data/tombstones/ /dev/ /system/ /sys/");
+    cmd += cmd_build ("ls -lR /data/data/gb.xxy.hr/ /data/data/gb.xxy.hr/lib/ /init* /sbin/ /firmware/ /data/anr/ /data/tombstones/ /dev/ /system/ /sys/");
 
     cmd += cmd_build ("cat " + hu_min_log);
 
@@ -2056,9 +1894,9 @@ out_audiotrack.flush ();
   private boolean file_email (String subject, String filename) {        // See http://stackoverflow.com/questions/2264622/android-multiple-email-attachment-using-intent-question
     Intent i = new Intent (Intent.ACTION_SEND);
     i.setType ("message/rfc822");                                       // Doesn't work well: i.setType ("text/plain");
-    i.putExtra (Intent.EXTRA_EMAIL  , new String []{"mikereidis@gmail.com"});
+    i.putExtra (Intent.EXTRA_EMAIL  , new String []{"borconie@gmail.com"});
     i.putExtra (Intent.EXTRA_SUBJECT, subject);
-    i.putExtra (Intent.EXTRA_TEXT   , "Please write write problem, device/model and ROM/version. Please ensure " + filename + " file is actually attached or send manually. Thanks ! Mike.");
+    i.putExtra (Intent.EXTRA_TEXT   , "Please write write problem, device/model and ROM/version. Please ensure " + filename + " file is actually attached or send manually. Thanks ! Emil.");
     i.putExtra (Intent.EXTRA_STREAM, Uri.parse ("file://" + filename)); // File -> attachment
     try {
       startActivity (Intent.createChooser (i, "Send email..."));
@@ -2070,7 +1908,7 @@ out_audiotrack.flush ();
     return (true);
   }
 
-  private String hu_min_log = "/data/data/ca.yyx.hu/files/hu.log";
+  private String hu_min_log = "/data/data/gb.xxy.hr/files/hu.log";
   private String hu_sho_log = "hu.log"; // Short name
   private int long_logs_email () {
     String cmd = "bugreport > " + logfile;
@@ -2079,7 +1917,7 @@ out_audiotrack.flush ();
       String str = "" + m_tv_log.getText ();
       hu_uti.file_write (this, hu_sho_log, hu_uti.str_to_ba (str));
 
-      logfile = "/sdcard/hulog.txt";//"/data/data/ca.yyx.hu/hu.txt";
+      logfile = "/sdcard/hulog.txt";//"/data/data/gb.xxy.hr/hu.txt";
       //hu_uti.daemon_set ("audio_alsa_log", "1");                       // Log ALSA controls
       cmd = new_logs_cmd_get ();
     }
@@ -2117,46 +1955,7 @@ out_audiotrack.flush ();
 
 
 
-    // Wifi:
 
-/*
-07-05 22:50:20.041 D/               wifi_init(32204): m_wifidir_mgr: android.net.wifi.p2p.WifiP2pManager@2b3c24b2  m_wifidir_chan: android.net.wifi.p2p.WifiP2pManager$Channel@f760c03  m_wifidir_bcr: ca.yyx.hu.hu_act$WiFiDirectBroadcastReceiver@1a3e3780
-07-05 22:50:20.044 D/               wifi_init(32204): at: ca.yyx.hu.hu_act$aa_wifi_async_task@23c3d9fe
-
-07-05 22:50:20.052 D/          doInBackground(32204): params: [Ljava.lang.Object;@3f0f4bac
-07-05 22:50:20.054 D/          doInBackground(32204): new serverSocket: ServerSocket[addr=::/::,port=0,localport=30515]
-
-07-05 22:50:20.085 E/               onFailure(32204): createGroup Failure reasonCode: 2
-
-07-05 22:50:20.086 D/               onReceive(32204): action: android.net.wifi.p2p.STATE_CHANGED
-07-05 22:50:20.086 D/               onReceive(32204): STATE_CHANGED Wifi P2P is enabled
-
-07-05 22:50:20.086 D/               onReceive(32204): action: android.net.wifi.p2p.CONNECTION_STATE_CHANGE
-07-05 22:50:20.086 D/               onReceive(32204): CONNECTION_CHANGED
-
-07-05 22:50:20.087 D/               onReceive(32204): action: android.net.wifi.p2p.THIS_DEVICE_CHANGED
-07-05 22:50:20.087 D/               onReceive(32204): THIS_DEVICE_CHANGED
-07-05 22:50:20.087 D/               onSuccess(32204): discoverPeers Success
-
-07-05 22:50:20.530 I/wpa_supplicant(  643): P2P-DEVICE-FOUND 52:2e:5c:e5:92:1f p2p_dev_addr=52:2e:5c:e5:12:1f pri_dev_type=10-0050F204-5 name='Android_381d' config_methods=0x188 dev_capab=0x25 group_capab=0xab vendor_elems=1
-
-07-05 22:50:20.532 D/               onReceive(32204): action: android.net.wifi.p2p.PEERS_CHANGED
-07-05 22:50:20.532 D/               onReceive(32204): PEERS_CHANGED
-
-07-05 22:50:20.536 D/        onPeersAvailable(32204): myPeerListListener onPeersAvailable peers: 
-07-05 22:50:20.536 D/        onPeersAvailable(32204): Device: Android_381d
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  deviceAddress: 52:2e:5c:e5:12:1f
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  primary type: 10-0050F204-5
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  secondary type: null
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  wps: 392
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  grpcapab: 171
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  devcapab: 37
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  status: 0
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  wfdInfo: WFD enabled: falseWFD DeviceInfo: 0
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  WFD CtrlPort: 0
-07-05 22:50:20.536 D/        onPeersAvailable(32204):  WFD MaxThroughput: 0
-
-*/
 
   private WifiP2pManager    m_wifidir_mgr;
   private Channel           m_wifidir_chan;
@@ -2235,82 +2034,25 @@ out_audiotrack.flush ();
     m_wifidir_mgr.createGroup (m_wifidir_chan, wal);
 
 
-    //Object obj = new Object ();
-    //new aa_wifi_async_task().execute (null);
-
-/*
-    AsyncTask at = new aa_wifi_async_task (this);
-    hu_uti.logd ("at: " + at);
-    if (at != null)
-      at.execute ();//obj);
-*/
 
     return (0);
   }
-
-
-/*
-  private int wifi_connect (WifiP2pDevice device) {
-    //obtain a peer from the WifiP2pDeviceList
-    WifiP2pConfig config = new WifiP2pConfig ();
-    config.deviceAddress = device.deviceAddress;
-    m_wifidir_mgr.connect (m_wifidir_chan, config, new ActionListener() {
-
-      @Override
-      public void onSuccess () {
-        hu_uti.logd ("connect Success");
-      }
-      @Override
-      public void onFailure (int reasonCode) {
-        hu_uti.loge ("connect Failure reasonCode: " + reasonCode);
-      }
-    });
-    return (0);
-  }
-*/
-
 
   private void wifi_resume () {
     hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
-/*
-    if (m_wifidir_bcr == null)  // If was registered earlier...
-    if (m_wifidir_bcr != null)  !!!!! ????
 
-      return;
-    try {
-      registerReceiver (m_wifidir_bcr, mIntentFilter);    // re-register
-    }
-    catch (Throwable e) {
-      e.printStackTrace ();
-    };
-
-    m_wifidir_mgr.discoverPeers (m_wifidir_chan, new WifiP2pManager.ActionListener () {
-      @Override
-      public void onSuccess () {
-        hu_uti.logd ("discoverPeers Success");
-      }
-      @Override
-      public void onFailure (int reasonCode) {
-        hu_uti.loge ("discoverPeers Failure reasonCode: " + reasonCode);
-      }
-    });
-*/
   }
 
   private void wifi_pause () {
     hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
-/*
-    if (m_wifidir_bcr == null)  // If was registered...
-      return;
-    try {
-      unregisterReceiver (m_wifidir_bcr);
-    }
-    catch (Throwable e) {
-      e.printStackTrace ();
-    };
-*/
+
   }
 
+  
+    
+  
+  // This is a funny one, once Wifip2p is launched broadcasts aren't firing any more?
+  // have to take another dive into it, meanwhile using primary wifip2p ip for connection.
   PeerListListener myPeerListListener = new PeerListListener () {
     @Override
     public void onPeersAvailable (WifiP2pDeviceList peers) {
@@ -2378,94 +2120,8 @@ out_audiotrack.flush ();
 
   }
 
+			
 
-/*
-  public class aa_wifi_async_task extends AsyncTask { //<Void, Void, Void> {
-
-    private Context context;
-    //private TextView statusText;
-
-    public aa_wifi_async_task (Context context) {//, View statusText) {
-      this.context = context;
-      //this.statusText = (TextView) statusText;
-      hu_uti.logd ("context: " + context);
-    }
-
-    @Override
-    protected Object doInBackground (Object... params) {//(Void... params) {// (Params... p) {//Void... v) {//Void... params) {
-    //protected String doInBackground (Object... obj) {//String... str) {// params) {
-
-      try {
-        hu_uti.logd ("params: " + params);
-
-        ServerSocket serverSocket = new ServerSocket (30515);//8888);   // Create a server socket
-        hu_uti.logd ("new serverSocket: " + serverSocket);
-
-        Socket client = serverSocket.accept ();                         // Block waiting for client connections
-        hu_uti.logd ("serverSocket.accept client: " + client);
-
-        // If this code is reached, a client has connected
-
-        InputStream  inp_str = client.getInputStream ();
-        OutputStream out_str = client.getOutputStream ();
-
-        byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 1};                    // Version Request
-        int ret = hu_aap_usb_set (0, 3, 1, vr_buf, vr_buf.length);
-        //ret = hu_aap_usb_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
-
-        out_str.write (vr_buf, 0, vr_buf.length);
-        out_str.flush ();
-        hu_uti.logd ("version request sent to Wifi output");
-
-        hu_uti.ms_sleep (200);
-        byte in_buf [] = new byte [65536];
-        int bytes_read = inp_str.read (in_buf, 0, 65536);
-        hu_uti.logd ("version response received from Wifi input bytes_read: " + bytes_read);
-        if (bytes_read > 0) {
-          hu_uti.hex_dump ("AA WiFi: ", in_buf, bytes_read);
-        }
-
-        out_str.close ();
-        inp_str.close ();
-
-        serverSocket.close();
-        return (null);// f.getAbsolutePath();
-      }
-      catch (IOException e) {
-        Log.e ("AAWiFi", e.getMessage ());
-        return null;
-      }
-    }
-
-    // Start activity that can handle the JPEG image
-    @Override
-    protected void onPostExecute (Object result) {//String result) {
-      hu_uti.logd ("result: " + result);
-//      if (result != null) {
-//        //statusText.setText("File copied - " + result);
-//        Intent intent = new Intent();
-//        intent.setAction(android.content.Intent.ACTION_VIEW);
-//        intent.setDataAndType(Uri.parse("file://" + result), "image/*");
-//        context.startActivity(intent);
-//      }
-    }
-  }
-
-  private int hu_aap_usb_set (int chan, int flags, int type, byte [] buf, int len) {  // Convenience function sets up 6 byte USB header: chan, flags, len, type
-
-    buf [0] = (byte) chan;                                              // Encode channel and flags
-    buf [1] = (byte) flags;
-    buf [2] = (byte) ((len -4) / 256);                                            // Encode length of following data:
-    buf [3] = (byte) ((len -4) % 256);
-    if (type >= 0) {                                                    // If type not negative, which indicates encrypted type should not be touched...
-      buf [4] = (byte) (type / 256);
-      buf [5] = (byte) (type % 256);                                             // Encode msg_type
-    }
-
-    return (len);
-  }
-
-*/
 
 }
-
+  
