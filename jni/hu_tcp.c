@@ -94,7 +94,7 @@
     if (total_bytes_xfrd <= 0 && tcp_err < 0) {
       if (errno == EAGAIN || errno == ETIMEDOUT || tcp_err == LIBtcp_ERROR_TIMEOUT)
         return (0);
-
+		logd("errno: %d (%s)", errno, strerror (errno));
       hu_tcp_stop ();  // Other errors here are fatal, so stop tcp
       return (-1);
     }
@@ -117,8 +117,8 @@
 
     long ms_tmo = ms_get ();
     if (tmo > 0)                                                        // If tmo valid...
-      ms_tmo += tmo;                                                    // Timeout time = now + tmo
-    else
+     ms_tmo += tmo;                                                    // Timeout time = now + tmo
+	else
       ms_tmo += 1000;                                                   // Else default 1 second for special case
 
     int avail = 0;
@@ -128,7 +128,12 @@
       if (avail < len)                                                  // If we don't have the needed bytes yet...
         ms_sleep (1);//3);
     }
-
+	if (tmo == -2)
+	{
+	avail = recv (tcp_io_fd, buf, len, MSG_WAITALL );   
+	logv ("hu_tcp_recv avail: %d  len: %d", avail, len);
+	return (avail);
+	}
     if (tmo > 0) {
       sock_tmo_set (tcp_io_fd, tmo);
     }
@@ -167,7 +172,8 @@
       int ret = write (tcp_io_fd, buf, len);
       if (ret != len) {             // Write, if can't write full buffer...
         loge ("Error write  errno: %d (%s)", errno, strerror (errno));
-        //ms_sleep (101);                                                 // Sleep 0.1 second to try to clear errors
+       // ms_sleep (101);                                                 // Sleep 0.1 second to try to clear errors
+		// int ret = write (tcp_io_fd, buf, len);
       }
       //close (tcp_io_fd);
     //}
@@ -220,8 +226,14 @@
 
     errno = 0;
     int ret = 0;
-	  	   cli_addr.sin_addr.s_addr  = inet_addr(myip_string);
-	
+	  	  
+	if (myip_string == "127.0.0.1") {
+		cli_addr.sin_addr.s_addr == htonl (INADDR_LOOPBACK);
+	}
+	else 
+	{
+		cli_addr.sin_addr.s_addr  = inet_addr(myip_string);
+	}
       cli_addr.sin_family = AF_INET;
       cli_addr.sin_port = htons (5277);
       //logd ("cli_len: %d  fam: %d  addr: 0x%x  port: %d",cli_len,cli_addr.sin_family, ntohl (cli_addr.sin_addr.s_addr), ntohs (cli_addr.sin_port));
@@ -231,6 +243,20 @@
         loge ("Error connect errno: %d (%s)", errno, strerror (errno));
         return (-1);
       }
+	  
+	  	  //ADD a KEEPALIVE to the SOCKET
+		  if (myip_string != "127.0.0.1") {
+	  int keepalive = 1;
+	  ret = setsockopt(tcp_so_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive , sizeof(keepalive ));
+	        if (ret != 0) {
+        loge ("Error keepalive was not set errno: %d (%s)", errno, strerror (errno));
+        return (-1);
+      }
+	  else {
+		  logd("KEEPALIVE set succesfully");
+	  }
+		  }
+		  
       tcp_io_fd = tcp_so_fd;
   //  }
 

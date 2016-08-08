@@ -30,7 +30,11 @@
   int transport_type = 1; // 1=USB 2=WiFi
   int ihu_tra_recv  (byte * buf, int len, int tmo) {
     if (transport_type == 1)
-      return (hu_usb_recv  (buf, len, tmo));
+	{
+      if (tmo == -2)
+		  tmo = 2000;
+	  return (hu_usb_recv  (buf, len, tmo));
+	}
     else if (transport_type == 2)
       return (hu_tcp_recv  (buf, len, tmo));
     else
@@ -64,8 +68,8 @@
     if (ep_in_addr == 255 && ep_out_addr == 255) {
       logd ("AA Wifi Direct");
       transport_type = 2;       // WiFi
-      iaap_tra_recv_tmo = 1;
-      iaap_tra_send_tmo = 2;
+      iaap_tra_recv_tmo = 150;
+      iaap_tra_send_tmo = 250;
 	  my_mode=2;
     }
 	
@@ -73,16 +77,16 @@
 	  ep_out_addr=255;
       logd ("AA Self Mode");
       transport_type = 2;       // Self
-      iaap_tra_recv_tmo = 1;
-      iaap_tra_send_tmo = 2;
+      iaap_tra_recv_tmo = 150;
+      iaap_tra_send_tmo = 250;
 	  my_mode=3;
     }
 	else if (ep_in_addr == 255 && ep_out_addr == 2) {
 	  ep_out_addr=255;
       logd ("AA Wifi");
       transport_type = 2;       // WiFi
-      iaap_tra_recv_tmo = 1;
-      iaap_tra_send_tmo = 2;
+      iaap_tra_recv_tmo = 150;
+      iaap_tra_send_tmo = 250;
 	  my_mode=4;
     }
 	 

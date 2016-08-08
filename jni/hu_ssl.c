@@ -65,6 +65,7 @@
   int hu_ssl_handshake () {
 
     int                 ret;
+    BIO               * ca_cert_bio = NULL;
     BIO               * cert_bio = NULL;
     BIO               * pkey_bio = NULL;
 #ifdef HU_USB_ERROR
@@ -102,8 +103,29 @@
     }
 
     //CRYPTO_set_locking_callback (locking_function);
-
-    cert_bio = BIO_new_mem_buf (cert_buf, sizeof (cert_buf));           // Read only memory BIO for certificate
+//CA CERT
+	/*FILE *fp;
+	fp=fopen("/sdcard/ca.pem", "w+");
+    fputs(ca_cert_buf, fp);           
+	fclose(fp);
+	 logd ("Cert file created sucsefully");
+    ca_cert_bio = BIO_new_mem_buf (ca_cert_buf, sizeof (ca_cert_buf));           // Read only memory BIO for certificate
+    pem_password_cb * ppcb3 = NULL;
+    void * u3 = NULL;
+    X509 * ca_x509 = NULL;
+    X509 * ca_x509_cert = PEM_read_bio_X509_AUX (cert_bio, & ca_x509, ppcb3, u3);
+    if (ca_x509_cert == NULL) {
+      loge ("read_ca_bio_X509_AUX() error");
+      return (-1);
+    }
+    logd ("PEM_read_bio_X509_AUX() x509_cert: %p", ca_x509_cert);
+    ret = BIO_free (cert_bio);
+    if (ret != 1)
+      loge ("BIO_free(cert_bio) ret: %d", ret);
+    else
+      logd ("BIO_free(cert_bio) ret: %d", ret);*/
+//CERT
+  cert_bio = BIO_new_mem_buf (cert_buf, sizeof (cert_buf));           // Read only memory BIO for certificate
     pem_password_cb * ppcb1 = NULL;
     void * u1 = NULL;
     X509 * x509 = NULL;
@@ -151,6 +173,13 @@
     }
     logd ("SSL_CTX_new() hu_ssl_ctx: %p", hu_ssl_ctx);
 
+	 /*ret = SSL_CTX_use_certificate_chain_file (hu_ssl_ctx, "/sdcard/ca.pem");
+    if (ret != 1)
+      loge ("CA SSL_CTX_use_certificate() ret: %d", ret);
+    else
+      logd ("CA SSL_CTX_use_certificate() ret: %d", ret);*/
+	
+	
     ret = SSL_CTX_use_certificate (hu_ssl_ctx, x509_cert);
     if (ret != 1)
       loge ("SSL_CTX_use_certificate() ret: %d", ret);
@@ -244,7 +273,7 @@ BIO_set_write_buf_size (hu_ssl_wm_bio, DEFBUF);
 
     byte hs_buf [DEFBUF] = {0};
     int hs_ctr  = 0;
-
+	
     int hs_finished = 0;//SSL_is_init_finished (hu_ssl_ssl)
 
     while (! hs_finished && hs_ctr ++ < 2) {
@@ -257,22 +286,27 @@ BIO_set_write_buf_size (hu_ssl_wm_bio, DEFBUF);
         hu_ssl_inf_log ();
       }
 
+	
       ret = BIO_read (hu_ssl_wm_bio, & hs_buf [6], sizeof (hs_buf) - 6);         // Read from the BIO Client request: Hello/Key Exchange
       if (ret <= 0) {
-        loge ("BIO_read() HS client req ret: %d", ret);
+        loge ("BIO_read() HS client req ret: %d, string: %X", ret, hs_buf);
         return (-1);
       }
-      logd ("BIO_read() HS client req ret: %d", ret);
+	 
+	  
+      logd ("BIO_read() HS client req ret: %d, string: %X", ret, hs_buf);
       int len = ret + 6;
+	  
       ret = hu_aap_tra_set (AA_CH_CTR, 3, 3, hs_buf, len);              // chan:0/AA_CH_CTR   flags:first+last    msg_type:SSL
       ret = hu_aap_tra_send (hs_buf, len, 2000);                       // Send Client request to AA Server
       if (ret <= 0 || ret != len) {
         loge ("hu_aap_tra_send() HS client req ret: %d  len: %d", ret, len);
       }      
 
-      ret = hu_aap_tra_recv (hs_buf, sizeof (hs_buf), 2000);           // Get Rx packet from Transport: Receive Server response: Hello/Change Cipher
+	  
+      ret = hu_aap_tra_recv (hs_buf, sizeof (hs_buf), -2);           // Get Rx packet from Transport: Receive Server response: Hello/Change Cipher
       if (ret <= 0) {                                                   // If error, then done w/ error
-        loge ("HS server rsp ret: %d", ret);
+        loge ("HS server rsp ret: %d, string: %X", ret, hs_buf);
         return (-1);
       }  
       logd ("HS server rsp ret: %d", ret);
