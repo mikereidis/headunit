@@ -177,6 +177,7 @@ Public for hu_tra:
 
   public static String myip="127.0.0.1";
   public static boolean transport_audio=true;
+  public static int autostart=0;
   
   private static final int PRESET_LEN_TOT = 16;
   private static final int PRESET_LEN_FIX = 11;
@@ -433,7 +434,11 @@ Public for hu_tra:
 
     hu_uti.logd ("end");
 	
-	
+	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+	autostart=Integer.parseInt(SP.getString("autostart","0"));
+	myip = SP.getString("wifiip", "192.168.43.1");
+	transport_audio=SP.getBoolean("phoneaudio",false);
+
   }
 
   private static boolean starting_car_mode = false;
@@ -650,7 +655,9 @@ Public for hu_tra:
         name = "RUsb";    
  	else if (idx == 11)
         name = "Settings";
-
+	/*else if (idx == 12)
+        name = "Send Log";*/
+	
       m_preset_name [idx] = name;
       m_preset_tv [idx].setText (name);
       m_preset_ib [idx].setImageResource (R.drawable.transparent);
@@ -724,6 +731,8 @@ Public for hu_tra:
 				Intent i = new Intent(this, hu_pref.class);
                 startActivity(i);
 	}
+	/*else if (idx == 12)
+			logs_email ();*/
     else if (idx >= PRESET_LEN_FIX && idx <= PRESET_LEN_TOT - 1)
       m_hu_tra.presets_select (idx - PRESET_LEN_FIX);
     return;
@@ -1024,7 +1033,32 @@ Public for hu_tra:
 
       bb = ByteBuffer.wrap (bc);                                        // Wrap chunk byte array bc to create byte buffer bb
 
-      media_decode (bb);                                                // Decode audio or H264 video content
+      media_decode (bb);    	  // Decode audio or H264 video content
+	  /*	
+		int pos = bb.position ();
+		int siz = bb.remaining ();
+		int last = pos + siz - 1;
+		byte [] b_test = bb.array ();
+	
+		byte b1 = b_test [pos + 3];
+		byte bl = b_test [last];
+		
+		
+		Socket socket = null;
+        String host = "192.168.1.3";
+		try {
+        socket = new Socket(host, 3268);
+		} catch (IOException ex) {
+            System.out.println("Can't accept client connection. ");
+        }
+		try {
+        OutputStream out = socket.getOutputStream();
+		out.write (b_test, pos, siz); 
+		} catch (IOException ex) {
+            System.out.println("Can't accept client connection. ");
+        }
+		
+		*/
       hu_uti.ms_sleep (20);                                             // Wait a frame
     }
 
@@ -1268,7 +1302,9 @@ Public for hu_tra:
     catch (Throwable t) {
       hu_uti.loge ("Throwable: " + t);
     }
-
+	if (autostart>0)
+		wifi_start(autostart);
+	
   }
 
   @Override
