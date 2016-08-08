@@ -1,4 +1,10 @@
-# headunit
+# Headunit Reloaded.
+
+This project is a spin off of the late Mike Reidis, it meant to implement some improvements and some small fixes and also to keep the app alive. The XDA thread can be found here:
+
+http://forum.xda-developers.com/general/paid-software/android-4-1-headunit-reloaded-android-t3432348
+
+#Original Headunit
 Headunit for Android Auto (tm)
 
 A new car or a $600+ headunit is NOT required to enjoy the integration and distraction reduced environment of Android Auto.
