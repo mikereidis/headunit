@@ -9,22 +9,18 @@ import android.graphics.Color;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.HorizontalScrollView;
-
+import android.graphics.Matrix;
 import android.os.PowerManager;
 import android.app.UiModeManager;
-
 import android.widget.ListView;
 import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
-
-
 import android.net.wifi.p2p.*;
 import android.net.wifi.p2p.WifiP2pManager.*;
 import java.net.ServerSocket;
 import android.os.AsyncTask;
 import java.io.File;
 import android.os.Environment;
-
 import android.net.wifi.WifiManager;
 import java.io.Closeable;
 import java.io.IOException;
@@ -34,23 +30,16 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.ConnectException;
-
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-
 import android.media.MediaRecorder;
 import android.media.AudioRecord;
-
 import android.app.Activity;
-import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.media.MediaCodec;
@@ -64,39 +53,28 @@ import android.view.SurfaceHolder;
 import android.graphics.SurfaceTexture;
 import android.view.TextureView;
 import android.view.View;
+import android.view.KeyEvent;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Timer;
-
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
-
-
-import android.app.Activity;
-
 import android.support.v4.widget.DrawerLayout;
-
-import android.content.Context;
 import android.os.Build;
-import android.os.Bundle;
+import android.os.Handler;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
-import android.widget.TextView;
-
 import android.support.v4.app.Fragment;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
+
 
 public class hu_act extends Activity          implements TextureView.SurfaceTextureListener {
 
@@ -164,23 +142,23 @@ Public for hu_tra:
   private double        m_scr_wid  = 0;
   private double        m_scr_hei  = 0;
 
-  private double        m_virt_vid_wid = 800f;
-  private double        m_virt_vid_hei = 480f;
+   private double        m_virt_vid_wid = 800f;
+   private double        m_virt_vid_hei = 480f;
   //private double        m_virt_vid_wid = 1280f;
-  //private double        m_virt_vid_hei =  720f;
+ // private double        m_virt_vid_hei =  720f;
   //private double        m_virt_vid_wid = 1920f;
   //private double        m_virt_vid_hei = 1080f;
 
   private boolean       m_scr_land     = true;
 
     // Presets:
-
+  public static int last_possition=3;
   public static String myip="127.0.0.1";
-  public static boolean transport_audio=true;
+
   public static int autostart=0;
-  
-  private static final int PRESET_LEN_TOT = 16;
-  private static final int PRESET_LEN_FIX = 11;
+  public static Intent saved_intent;
+  private static final int PRESET_LEN_TOT = 13;
+  private static final int PRESET_LEN_FIX = 10;
   public  static final int PRESET_LEN_USB = PRESET_LEN_TOT - PRESET_LEN_FIX;  // Room left over for USB entries
   private ImageButton[] m_preset_ib     = {null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null};   // 16 Preset Image Buttons
   private TextView   [] m_preset_tv     = {null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null};   // 16 Preset Text Views
@@ -236,14 +214,11 @@ Public for hu_tra:
     "Self",
     "Wifi",
     "WifiP2p",
-    "Day",
-    "Night",
-    "Auto",
     "Hide",
     "SUsb",
     "RUsb",
 	"Settings",
-	"",
+	"Send Log",
     "","",""
   };
 
@@ -269,12 +244,20 @@ Public for hu_tra:
   @Override
   protected void onCreate (Bundle savedInstanceState) {
     super.onCreate (savedInstanceState);
-
+	
     Log.d ("hu", "Headunit for Android Auto (tm) - Copyright 2011-2015 Michael A. Reid. All Rights Reserved...");
+	
+	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
+	boolean hires=SP.getBoolean("hires",false);
+	
+	if (hires) {
+		m_virt_vid_wid=1280f;
+		m_virt_vid_hei=720f;
+	}
 
     hu_uti.logd ("--- savedInstanceState: " + savedInstanceState);
     hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
-
+	saved_intent = getPackageManager().getLaunchIntentForPackage("gb.xxy.hr");
     //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ()); // Too early
     //car_mode_start ();
 
@@ -365,6 +348,34 @@ Public for hu_tra:
 
     m_tv_vid = (TextureView) findViewById (R.id.tv_vid);
     if (m_tv_vid != null) {
+	
+	
+	// int xoff = (1280 - 1920) / 2;
+	// int yoff = (720 - 1080) / 2;
+	// Matrix txform = new Matrix();
+    // m_tv_vid.getTransform(txform);
+    // txform.setScale((float) 1280 / 1920, (float) 720 / 1080);
+    // txform.postTranslate(xoff, yoff);
+    // m_tv_vid.setTransform(txform);
+
+	
+	// Scale The Video
+	
+	
+        
+
+       /* Matrix txform = new Matrix();
+        m_tv_vid.getTransform(txform);
+        txform.setScale((float) 1.33, (float) 1);
+        //txform.postRotate(10);          // just for fun
+        txform.postTranslate((int)((int) m_scr_wid-((int) m_scr_wid * 1.33))/2, 1/2);
+        m_tv_vid.setTransform(txform);
+	
+	*/
+	
+	// Done with scaleing
+	
+	
       m_tv_vid.setSurfaceTextureListener (hu_act.this);
       m_tv_vid.setOnTouchListener (new View.OnTouchListener () {
         @Override
@@ -407,7 +418,7 @@ Public for hu_tra:
     m_hu_tra = new hu_tra (this);                                       // Start USB/SSL/AAP Transport
     if (m_hu_tra != null) {
       Intent intent = getIntent ();                                     // Get launch Intent
-
+	
       int ret = 0;
       if (! disable_usb)
         ret = m_hu_tra.transport_start (intent);
@@ -434,11 +445,12 @@ Public for hu_tra:
 
     hu_uti.logd ("end");
 	
-	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+	//SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
+	if (autostart != 9) {
 	autostart=Integer.parseInt(SP.getString("autostart","0"));
 	myip = SP.getString("wifiip", "192.168.43.1");
-	transport_audio=SP.getBoolean("phoneaudio",false);
-
+	
+	}
   }
 
   private static boolean starting_car_mode = false;
@@ -600,9 +612,7 @@ Public for hu_tra:
     m_preset_tv [10]= (TextView) findViewById (R.id.tv_preset_10);
     m_preset_tv [11]= (TextView) findViewById (R.id.tv_preset_11);
     m_preset_tv [12]= (TextView) findViewById (R.id.tv_preset_12);
-    m_preset_tv [13]= (TextView) findViewById (R.id.tv_preset_13);
-    m_preset_tv [14]= (TextView) findViewById (R.id.tv_preset_14);
-    m_preset_tv [15]= (TextView) findViewById (R.id.tv_preset_15);
+
 
         // Imagebuttons:
     m_preset_ib [0] = (ImageButton) findViewById (R.id.ib_preset_0);
@@ -618,9 +628,7 @@ Public for hu_tra:
     m_preset_ib [10]= (ImageButton) findViewById (R.id.ib_preset_10);
     m_preset_ib [11]= (ImageButton) findViewById (R.id.ib_preset_11);
     m_preset_ib [12]= (ImageButton) findViewById (R.id.ib_preset_12);
-    m_preset_ib [13]= (ImageButton) findViewById (R.id.ib_preset_13);
-    m_preset_ib [14]= (ImageButton) findViewById (R.id.ib_preset_14);
-    m_preset_ib [15]= (ImageButton) findViewById (R.id.ib_preset_15);
+
 
     for (int idx = 0; idx < PRESET_LEN_TOT; idx ++) {                   // For all presets...
       m_preset_tv [idx].setOnClickListener     (preset_select_lstnr);   // Set click listener
@@ -641,22 +649,22 @@ Public for hu_tra:
         name = "Wifi";
       else if (idx == 4)
         name = "WifiP2p";
+      // else if (idx == 5)
+        // name = "Day";
+      // else if (idx == 6)
+        // name = "Night";
+      // else if (idx == 7)
+        // name = "Auto";
       else if (idx == 5)
-        name = "Day";
-      else if (idx == 6)
-        name = "Night";
-      else if (idx == 7)
-        name = "Auto";
-      else if (idx == 8)
         name = "CarM";
-      else if (idx == 9)
+      else if (idx == 6)
         name = "SUsb";
-      else if (idx == 10)
+      else if (idx == 7)
         name = "RUsb";    
- 	else if (idx == 11)
+ 	else if (idx == 8)
         name = "Settings";
-	/*else if (idx == 12)
-        name = "Send Log";*/
+	else if (idx == 9)
+        name = "Send Log";
 	
       m_preset_name [idx] = name;
       m_preset_tv [idx].setText (name);
@@ -685,10 +693,15 @@ Public for hu_tra:
       video_test_start (false);
     else if (idx == 2) 
 	{
-		Toast.makeText (m_context, "Starting Self - Please Wait... :)", Toast.LENGTH_LONG).show ();  
+			myip="127.0.0.1";
+		  Toast.makeText (m_context, "Starting Self - Please Wait... :)", Toast.LENGTH_LONG).show ();  
 		  sys_ui_show ();
-	
-		   transport_audio=false;			
+		  int ret = hu_uti.sys_run("am force-stop com.google.android.projection.gearhead; am start -W -n com.google.android.projection.gearhead/.companion.SplashScreenActivity; am startservice -n com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService;",true);
+		  if (ret==1) {
+			  Intent aaintent = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+			  startActivity(aaintent);
+			  }
+		  			
 		   wifi_start (2);
 	}
       else if (idx == 3) 
@@ -696,43 +709,43 @@ Public for hu_tra:
 		Toast.makeText (m_context, "Starting Wifi - Please Wait... :)", Toast.LENGTH_LONG).show ();  
 		sys_ui_show ();
 		
-			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
 			myip = SP.getString("wifiip", "192.168.43.1");
-			transport_audio=SP.getBoolean("phoneaudio",false);
+			
 		   wifi_start (3);
 	
 		
 	}
 	  else if (idx == 4)
 	  {
-			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
-			transport_audio=SP.getBoolean("phoneaudio",false);
+			SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
+			
 		Toast.makeText (m_context, "Starting P2PWifi - Please Wait... :)", Toast.LENGTH_LONG).show ();  
 		  sys_ui_show ();
 		  wifi_init ();
 		   wifi_start (4);
 	  }
   
-     else if (idx == 5)  // Day
+     /*else if (idx == 5)  // Day
       m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_NO);
     else if (idx == 6)
       m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_YES);
     else if (idx == 7)
-      m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO);
-    else if (idx == 8)
+      m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO);*/
+    else if (idx == 5)
       //m_uim_mgr.enableCarMode (0);//UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME);
       hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
-    else if (idx == 9)
+    else if (idx == 6)
       m_hu_tra.usb_force ();
-    else if (idx == 10)
+    else if (idx == 7)
       hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
-    else if (idx == 11) 
+    else if (idx == 8) 
 	{
 				Intent i = new Intent(this, hu_pref.class);
                 startActivity(i);
 	}
-	/*else if (idx == 12)
-			logs_email ();*/
+	else if (idx == 9)
+			logs_email ();
     else if (idx >= PRESET_LEN_FIX && idx <= PRESET_LEN_TOT - 1)
       m_hu_tra.presets_select (idx - PRESET_LEN_FIX);
     return;
@@ -816,8 +829,7 @@ Public for hu_tra:
     // Start activity that can handle the JPEG image
     @Override
     protected void onPostExecute (Object result) {//String result) {
-      hu_uti.logd ("result: " + result);
-
+		
     }
   }
 
@@ -841,13 +853,13 @@ Public for hu_tra:
 	int ret = -1;
 	if (con_type==2) {
 		
-		m_hu_tra.jni_aap_start ("127.0.0.1",false);     
+		m_hu_tra.jni_aap_start ("127.0.0.1");     
 	}
 	else if (con_type == 3) {
-		m_hu_tra.jni_aap_start (myip,transport_audio);
+		m_hu_tra.jni_aap_start (myip);
 	}
 	else {
-	 ret = m_hu_tra.jni_aap_start ("192.168.49.122",transport_audio);           }                   // Start JNI Android Auto Protocol and Main Thread
+	 ret = m_hu_tra.jni_aap_start ("192.168.49.122");           }                   // Start JNI Android Auto Protocol and Main Thread
       hu_uti.logd ("jni_aap_start() ret: " + ret);
 
       m_tcp_connected = true;
@@ -1302,7 +1314,7 @@ Public for hu_tra:
     catch (Throwable t) {
       hu_uti.loge ("Throwable: " + t);
     }
-	if (autostart>0)
+	if (autostart>0 && autostart !=9)
 		wifi_start(autostart);
 	
   }
@@ -1379,7 +1391,10 @@ Public for hu_tra:
       if (index >= 0)
         m_codec.releaseOutputBuffer (index, true /*render*/);           // Return the buffer to the codec
       else if (index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)         // See this 1st shortly after start. API >= 21: Ignore as getOutputBuffers() deprecated
-        hu_uti.logd ("INFO_OUTPUT_BUFFERS_CHANGED");
+	  { hu_uti.logd ("INFO_OUTPUT_BUFFERS_CHANGED");
+	   if (myip=="127.0.0.1")
+			m_uim_mgr.enableCarMode (1);
+	  	  }
       else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)          // See this 2nd shortly after start. Output format changed for subsequent data. See getOutputFormat()
         hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
       else if (index == MediaCodec.INFO_TRY_AGAIN_LATER)
@@ -1993,6 +2008,168 @@ out_audiotrack.flush ();
 
 
 
+  
+  public boolean onKeyUp(int keyCode, KeyEvent event) {
+	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
+	boolean hires=SP.getBoolean("hires",false);
+	if (hires)
+	   switch (keyCode) {
+        case KeyEvent.KEYCODE_M:
+			
+              m_hu_tra.touch_send ((byte)0, 1260, 10);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 1260, 10);
+            return true;
+        case KeyEvent.KEYCODE_N:
+			  last_possition=0;
+              m_hu_tra.touch_send ((byte)0, 50, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 700);
+            return true;
+        case KeyEvent.KEYCODE_P:
+			  last_possition=1;
+              m_hu_tra.touch_send ((byte)0, 300, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 300, 700);
+            return true;
+        case KeyEvent.KEYCODE_H:
+			  last_possition=2;              
+			  m_hu_tra.touch_send ((byte)0, 640, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 640, 700);
+            return true;
+        case KeyEvent.KEYCODE_E:
+			  last_possition=3;              
+			  m_hu_tra.touch_send ((byte)0, 900, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 900, 700);
+            return true;
+        case KeyEvent.KEYCODE_F:
+              m_hu_tra.touch_send ((byte)0, 900, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 900, 500);
+            return true;
+        case KeyEvent.KEYCODE_S:
+              m_hu_tra.touch_send ((byte)0, 640, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 640, 500);
+            return true;
+        case KeyEvent.KEYCODE_R:
+              m_hu_tra.touch_send ((byte)0, 500, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 500, 500);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_UP:
+              m_hu_tra.touch_send ((byte)0, 50, 200);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 200);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_DOWN:
+              m_hu_tra.touch_send ((byte)0, 50, 550);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 550);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_LEFT:
+		if (last_possition>0) {
+			last_possition--;
+              m_hu_tra.touch_send ((byte)0, (last_possition-1)*300+50, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*300+50, 700);
+		}
+            return true;
+        case KeyEvent.KEYCODE_DPAD_RIGHT:
+		if (last_possition<4) {
+			last_possition++;
+               m_hu_tra.touch_send ((byte)0, (last_possition-1)*300+50, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*300+50, 700);
+		}
+            return true;
+        
+       
+        default:
+            return super.onKeyUp(keyCode, event);
+    }
+	else 
+     switch (keyCode) {
+        case KeyEvent.KEYCODE_M:
+              m_hu_tra.touch_send ((byte)0, 780, 10);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 780, 10);
+            return true;
+        case KeyEvent.KEYCODE_N:
+			  last_possition=0;
+              m_hu_tra.touch_send ((byte)0, 10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 10, 160);
+            return true;
+        case KeyEvent.KEYCODE_P:
+			  last_possition=1;
+              m_hu_tra.touch_send ((byte)0, 200, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 200, 160);
+            return true;
+        case KeyEvent.KEYCODE_H:
+			  last_possition=2;		
+              m_hu_tra.touch_send ((byte)0, 400, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 400, 160);
+            return true;
+        case KeyEvent.KEYCODE_E:
+			  last_possition=3;		
+              m_hu_tra.touch_send ((byte)0, 600, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 600, 160);
+            return true;
+        case KeyEvent.KEYCODE_F:
+              m_hu_tra.touch_send ((byte)0, 500, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 500, 350);
+            return true;
+        case KeyEvent.KEYCODE_S:
+              m_hu_tra.touch_send ((byte)0, 400, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 400, 350);
+            return true;
+        case KeyEvent.KEYCODE_R:
+              m_hu_tra.touch_send ((byte)0, 300, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 300, 350);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_UP:
+              m_hu_tra.touch_send ((byte)0, 50, 120);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 120);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_DOWN:
+              m_hu_tra.touch_send ((byte)0, 50, 370);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 370);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_LEFT:
+		if (last_possition>0) {
+			last_possition--;
+              m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
+		}
+            return true;
+        case KeyEvent.KEYCODE_DPAD_RIGHT:
+		if (last_possition<4) {
+			last_possition++;
+              m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
+		}
+            return true;
+        
+       
+        default:
+            return super.onKeyUp(keyCode, event);
+    }
+}
+
+  
 
   private WifiP2pManager    m_wifidir_mgr;
   private Channel           m_wifidir_chan;
