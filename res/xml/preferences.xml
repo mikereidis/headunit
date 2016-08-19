@@ -8,5 +8,14 @@
                       android:defaultValue="true"
                       android:summary="Unchecking will keep the audio on the phone, highly recomanded to do so for Wifi connections."
                       android:key="phoneaudio" />
- 
+   <ListPreference    android:title="Autostart mode"
+                      android:summary="Select if you want to autostart any of the modes."
+                      android:key="autostart"
+                      android:defaultValue="0"
+                      android:entries="@array/listArray"
+                      android:entryValues="@array/listValues" />
+	<CheckBoxPreference android:title="720P - Needs app restart"
+                      android:defaultValue="false"
+                      android:summary="Enable 720P Video"
+                      android:key="hires" />
 </PreferenceScreen>
