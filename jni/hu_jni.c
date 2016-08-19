@@ -17,9 +17,9 @@
   int aap_state_start_error = 0;
   int aap_state_starts  = 0;
 
-  int jni_aa_cmd (int cmd_len, char * cmd_buf, int res_max, char * res_buf, char * myip_string, int transport_audio) {
+  int jni_aa_cmd (int cmd_len, char * cmd_buf, int res_max, char * res_buf, long myip_string, int transport_audio, int hires) {
     if (ena_log_extra || cmd_len >= 1)
-      logd ("trans audop: %d, cmd_len: %d  cmd_buf %p  res_max: %d  res_buf: %p", transport_audio, cmd_len, cmd_buf, res_max, res_buf);
+      logd ("trans audop: %d, cmd_len: %d  cmd_buf %p  res_max: %d  res_buf: %p, ip_long: %lu", transport_audio, cmd_len, cmd_buf, res_max, res_buf, myip_string);
     int res_len = 0;
     int ret = 0;
 	
@@ -32,7 +32,7 @@
       byte ep_in_addr  = cmd_buf [1];
       byte ep_out_addr = cmd_buf [2];                                   // Get endpoints passed
 
-      ret = hu_aap_start (ep_in_addr, ep_out_addr, myip_string, transport_audio);                     // Start USB/ACC/OAP, AA Protocol
+      ret = hu_aap_start (ep_in_addr, ep_out_addr, myip_string, transport_audio, hires);                     // Start USB/ACC/OAP, AA Protocol
 
       aap_state_starts ++;                                              // Count error starts too
       if (ret == 0) {
@@ -61,12 +61,38 @@
 */
     else if (cmd_buf != NULL && cmd_len >= 4) {                         // If encrypted command to send...
       int chan = 0;//cmd_buf [0];
-
+	int dont_send=0;
       if (cmd_len > 63)                                                 // If Microphone audio...
         chan = AA_CH_MIC;
       else if (cmd_len > 6 && cmd_buf [4] == 0x80 && cmd_buf [5] == 1)  // If Touch event...
         chan = AA_CH_TOU;
-      else                                                              // If Byebye or other control packet...
+     // else if (cmd_buf[0] == 8) {
+	//	chan == AA_CH_SEN; 
+//	logd("Detected night mode attempt");
+		
+		//byte micButton[] =  {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x54, 0x10, 0x00, 0x18, 0x00, 0x20, 0x00};
+		//byte nextButton[] = {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x57, 0x10, 0x01, 0x18, 0x00, 0x20, 0x00};
+	//	byte prevButton[] =   {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x58, 0x10, 0x01, 0x18, 0x00, 0x20, 0x00};
+	
+
+		//byte mapButton[] = 																						//08 80 f6 e9 fb f9 9b 11 1a 0d 0a 07 08 2c 10  d0
+	//	byte rspds[] =        {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x57, 0x10, 0x02, 0x18, 0x00, 0x20, 0x00};
+		//byte rspds [] =  {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x54, 0x10, 0x00, 0x18, 0x00, 0x20, 0x00};; 	// Day = 0, Night = 1 
+		// byte rspds [] = {0x80, 0x01, 0x08, 0xe8, 0x9f, 0x9d, 0xd0, 0xe9, 0x96, 0xe5, 0x8b, 0x14, 0x22, 0x0A, 0x0A, 0x08, 0x08, 0x57, 0x10, 0x01, 0x18, 0x00, 0x20, 0x00};
+		
+	//	hu_aap_enc_send (AA_CH_SEN, rspds, sizeof (rspds) ); 
+//	cmd_buf[0]=1;
+//	dont_send=1;
+//	  }
+//	    else if (cmd_buf[0] == 9) {
+//		chan == AA_CH_SEN; 
+//	logd("Detected night mode attempt");
+//		byte rspds [] = {0x80, 0x03, 0x52, 0x02, 0x08, 0x00}; 	// Day = 0, Night = 1 
+//		hu_aap_enc_send (AA_CH_SEN, rspds, sizeof (rspds)); 
+//	cmd_buf[0]=1;
+//	dont_send=1;
+//	  }
+	  else                                                              // If Byebye or other control packet...
         chan = AA_CH_CTR;
       if (chan != cmd_buf [0]) {
         loge ("chan: %d != cmd_buf[0]: %d", chan, cmd_buf [0]);
@@ -74,7 +100,7 @@
       }
 
       //hex_dump ("JNITX: ", 16, cmd_buf, cmd_len);
-
+	if (dont_send==0)
       ret = hu_aap_enc_send (chan, & cmd_buf [4], cmd_len - 4);         // Send
 
       if (cmd_buf != NULL && cmd_len  >= 8 && cmd_buf [5] == 15) {      // If byebye...
@@ -138,13 +164,13 @@
     return (res_len);
   }
 
-  JNIEXPORT jint Java_gb_xxy_hr_hu_1tra_native_1aa_1cmd (JNIEnv * env, jobject thiz, jint cmd_len, jbyteArray cmd_buf, jint res_len, jbyteArray res_buf, jstring myip_string, jint transport_audio) {
+  JNIEXPORT jint Java_gb_xxy_hr_hu_1tra_native_1aa_1cmd (JNIEnv * env, jobject thiz, jint cmd_len, jbyteArray cmd_buf, jint res_len, jbyteArray res_buf, jlong myip_string, jint transport_audio, jint hires) {
 	  
-	char *nativeString = (*env)->GetStringUTFChars(env, myip_string, 0);
+//	char *nativeString = (*env)->GetStringUTFChars(env, myip_string, 0);
 
    // use your string
 
-   (*env)->ReleaseStringUTFChars(env, myip_string, nativeString);
+ //  (*env)->ReleaseStringUTFChars(env, myip_string, nativeString);
 	  
 	  
     if (ena_log_extra)
@@ -166,7 +192,7 @@
     aa_cmd_buf = (*env)->GetByteArrayElements (env, cmd_buf, NULL);
     aa_res_buf = (*env)->GetByteArrayElements (env, res_buf, NULL);
 
-    int len = jni_aa_cmd (cmd_len, aa_cmd_buf, res_len, aa_res_buf, nativeString, transport_audio);
+    int len = jni_aa_cmd (cmd_len, aa_cmd_buf, res_len, aa_res_buf, myip_string, transport_audio, hires);
 
     if (cmd_buf != NULL)
       (*env)->ReleaseByteArrayElements (env, cmd_buf, aa_cmd_buf, 0);

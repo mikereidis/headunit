@@ -27,14 +27,14 @@ else ifeq   ($(TARGET_ARCH_ABI), arm64-v8a)
   LOCAL_MODULE    := libusbnok
   LOCAL_SRC_FILES := libsa64/libusbnok.a
   include $(PREBUILT_STATIC_LIBRARY)
-  #include $(CLEAR_VARS)
-  #LOCAL_MODULE    := libssl
-  #LOCAL_SRC_FILES := libsa64/libssl.so
-  #include $(PREBUILT_SHARED_LIBRARY)
-  #include $(CLEAR_VARS)
-  #LOCAL_MODULE    := libcrypto
-  #LOCAL_SRC_FILES := libsa64/libcrypto.so
-  #include $(PREBUILT_SHARED_LIBRARY)
+  include $(CLEAR_VARS)
+  LOCAL_MODULE    := libssl
+  LOCAL_SRC_FILES := libsa64/libssl.so
+  include $(PREBUILT_SHARED_LIBRARY)
+  include $(CLEAR_VARS)
+  LOCAL_MODULE    := libcrypto
+  LOCAL_SRC_FILES := libsa64/libcrypto.so
+  include $(PREBUILT_SHARED_LIBRARY)
 else ifeq   ($(TARGET_ARCH_ABI), x86)
   include $(CLEAR_VARS)
   LOCAL_MODULE    := libusbnok
@@ -75,17 +75,15 @@ ifeq        ($(TARGET_ARCH_ABI), armeabi)
   LOCAL_LDLIBS    := -llog
   LOCAL_STATIC_LIBRARIES := libusbnok libssl libcrypto
 
-else ifeq   ($(TARGET_ARCH_ABI), arm64-v8a) #  LOCAL_LDLIBS    := -llog -lssl -lcrypto  #  #LOCAL_SHARED_LIBRARIES := libssl libcrypto  #  LOCAL_STATIC_LIBRARIES := libusbnok #  LOCAL_LDLIBS    := -llog -l/home/m/dev/hu/jni/libsa64/libssl.so  -l/home/m/dev/hu/jni/libsa64/libcrypto.so -l/home/m/dev/hu/jni/libsa64/libusbnok.a
+else ifeq   ($(TARGET_ARCH_ABI), arm64-v8a) 
   LOCAL_LDLIBS    := -llog
-
   LOCAL_STATIC_LIBRARIES := libusbnok libssl libcrypto
+  
 else ifeq   ($(TARGET_ARCH_ABI), x86)
   LOCAL_LDLIBS    := -llog
   LOCAL_STATIC_LIBRARIES := libusbnok libssl libcrypto
-  #LOCAL_LDLIBS    := -llog -l/home/m/dev/hu/jni/libsx86/libssl.so  -l/home/m/dev/hu/jni/libsx86/libcrypto.so -l/home/m/dev/hu/jni/libsx86/libusbnok.a  #LOCAL_LDLIBS    := -llog #-lssl -lcrypto
-  #LOCAL_SHARED_LIBRARIES := libssl libcrypto
-  #LOCAL_STATIC_LIBRARIES := libusbnok    #else ifeq  ($(TARGET_ARCH_ABI), armeabi-v7a)
-else
+ 
+ else
   $(error Not a supported TARGET_ARCH_ABI: $(TARGET_ARCH_ABI))
 endif
 

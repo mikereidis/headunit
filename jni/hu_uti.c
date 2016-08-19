@@ -68,7 +68,7 @@
 
   // Enables for hex_dump:
   int ena_hd_hu_aad_dmp = 1;        // Higher level
-  int ena_hd_tra_send   = 0;        // Lower  level
+  int ena_hd_tra_send   = 1;        // Lower  level
   int ena_hd_tra_recv   = 0;
 
   int ena_log_hexdu = 1;//1;    // Hex dump master enable

@@ -5,7 +5,7 @@
   #include "hu_uti.h"                                                  // Utilities
 
   int itcp_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
-  char * myip_string="127.0.0.1"; //Default case is loopback we might receive other address.
+  long myip_string=2130706433; //Default case is loopback we might receive other address.
 
   #ifdef __ANDROID_API__
   //#include <libtcp.h>
@@ -134,6 +134,7 @@
 	logv ("hu_tcp_recv avail: %d  len: %d", avail, len);
 	return (avail);
 	}
+
     if (tmo > 0) {
       sock_tmo_set (tcp_io_fd, tmo);
     }
@@ -141,7 +142,8 @@
     errno = 0;
     int ret = 0;
 
-    while (ms_get () < ms_tmo) {
+	
+    /*while (ms_get () < ms_tmo) {
       //loge ("7777 BEFORE READ");
       //loge ("7777 BEFORE READ 2");
       ret = read (tcp_io_fd, buf, len);
@@ -159,7 +161,11 @@
 
         return (ret);
       }
-    }
+    }*/
+	// ret = recv (tcp_io_fd, buf, len,MSG_EOR);
+	ret = recv (tcp_io_fd, buf, len,MSG_EOR);
+	
+	//ret = recv (tcp_io_fd, buf, len, MSG_WAITALL );   
     return (ret);
   }
 
@@ -201,12 +207,14 @@
 
   #define CS_FAM   AF_INET
 
-  #define CS_SOCK_TYPE    SOCK_STREAM
+  #define CS_SOCK_TYPE    SOCK_STREAM     
   #define   RES_DATA_MAX  65536
+  //#define   RES_DATA_MAX  131072
 
 
 
-  struct sockaddr_in  cli_addr = {0};
+ // struct sockaddr_in  cli_addr = {0}; - changed on 10.08.2016, this was used in version 1.02
+  struct sockaddr_in  cli_addr;
   socklen_t cli_len = 0;
 
   int itcp_accept (int tmo) {
@@ -220,33 +228,46 @@
     if (tcp_io_fd < 0)                                                  // If we don't have an IO socket yet...
       sock_tmo_set (tcp_so_fd, tmo);//3000);//tmo);                     // Set socket timeout for polling every tmo milliseconds
 
-    memset ((char *) & cli_addr, sizeof (cli_addr), 0);                 // ?? Don't need this ?
+   // memset ((char *) & cli_addr, sizeof (cli_addr), 0);                - changed on 10.08.2016, this was used in version 1.02 // ?? Don't need this ?
     //cli_addr.sun_family = CS_FAM;                                     // ""
     cli_len = sizeof (cli_addr);
 
     errno = 0;
     int ret = 0;
 	  	  
-	if (myip_string == "127.0.0.1") {
+	/*if (myip_string == 2130706433) {
 		cli_addr.sin_addr.s_addr == htonl (INADDR_LOOPBACK);
-	}
-	else 
-	{
-		cli_addr.sin_addr.s_addr  = inet_addr(myip_string);
-	}
+	}*/
+	
+	//else 
+	//{
+		
+		
+		/*unsigned char bytes[4];
+		
+		bytes[0] = myip_string & 0xFF;
+		bytes[1] = (myip_string >> 8) & 0xFF;
+		bytes[2] = (myip_string >> 16) & 0xFF;
+		bytes[3] = (myip_string >> 24) & 0xFF;	
+		logd("%d.%d.%d.%d", bytes[3], bytes[2], bytes[1], bytes[0]);   
+		//logd("The converted string is %s",converted_string);
+		//cli_addr.sin_addr.s_addr  = inet_addr("%d.%d.%d.%d",bytes[3], bytes[2], bytes[1], bytes[0]);*/
+		
+		cli_addr.sin_addr.s_addr  = myip_string;
+	//}
       cli_addr.sin_family = AF_INET;
       cli_addr.sin_port = htons (5277);
       //logd ("cli_len: %d  fam: %d  addr: 0x%x  port: %d",cli_len,cli_addr.sin_family, ntohl (cli_addr.sin_addr.s_addr), ntohs (cli_addr.sin_port));
 
       ret = connect (tcp_so_fd, (const struct sockaddr *) & cli_addr, cli_len);
       if (ret != 0) {
-        loge ("Error connect errno: %d (%s)", errno, strerror (errno));
+        loge ("Error connect errno: %d (%s) - ipaddress: %ul ", errno, strerror (errno), myip_string);
         return (-1);
       }
 	  
 	  	  //ADD a KEEPALIVE to the SOCKET
-		  if (myip_string != "127.0.0.1") {
-	  int keepalive = 1;
+		 // if (myip_string != "127.0.0.1") {
+	  /*int keepalive = 1;
 	  ret = setsockopt(tcp_so_fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive , sizeof(keepalive ));
 	        if (ret != 0) {
         loge ("Error keepalive was not set errno: %d (%s)", errno, strerror (errno));
@@ -255,7 +276,17 @@
 	  else {
 		  logd("KEEPALIVE set succesfully");
 	  }
-		  }
+	  
+	  ret = setsockopt(tcp_so_fd, SOL_SOCKET, SOCK_SEQPACKET, &keepalive , sizeof(keepalive ));
+	        if (ret != 0) {
+        loge ("Error SOCK_SEQPACKET was not set errno: %d (%s)", errno, strerror (errno));
+        return (-1);
+      }
+	  else {
+		  logd("SOCK_SEQPACKET set succesfully");
+	  }
+	  */
+		 // }
 		  
       tcp_io_fd = tcp_so_fd;
   //  }
@@ -289,11 +320,12 @@
     }
 //*
     int flag = 1;
-    int ret = setsockopt (tcp_so_fd, SOL_TCP, TCP_NODELAY, & flag, sizeof (flag));  // Only need this for IO socket from accept() ??
+    int ret = setsockopt (tcp_so_fd, SOL_TCP, TCP_NODELAY , & flag, sizeof (flag));  // Only need this for IO socket from accept() ??
     if (ret != 0)
       loge ("setsockopt TCP_NODELAY errno: %d (%s)", errno, strerror (errno));
     else
       logd ("setsockopt TCP_NODELAY Success");
+  
 //*/
     sock_reuse_set (tcp_so_fd);
 
@@ -320,8 +352,8 @@
   }
 
 
-  int hu_tcp_start (byte ep_in_addr, byte ep_out_addr, char * myip) {
-
+  int hu_tcp_start (byte ep_in_addr, byte ep_out_addr, long myip) {
+	//logd ("Recived IP is: %s", myip);
 	myip_string=myip;
 	
     int ret = 0;
