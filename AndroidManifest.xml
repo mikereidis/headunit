@@ -2,8 +2,8 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="gb.xxy.hr"
-  android:versionCode="1"
-  android:versionName="Headunit Reloaded V1" >
+  android:versionCode="17"
+  android:versionName="Headunit Reloaded V2.0" >
 
   <uses-feature android:name="android.hardware.usb.host"          android:required="false"/>
   <uses-feature android:name="android.hardware.screen.landscape"  android:required="false"/>
@@ -42,11 +42,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
 
   <application android:label="Headunit Reloaded"
     android:icon="@drawable/hu_icon_256"
-    android:hardwareAccelerated="true">
+    android:hardwareAccelerated="true"
+	android:persistent="true">
 
 <!-- 
   <application android:label="@string/app_name"
@@ -66,21 +68,25 @@ android:screenOrientation="portrait"
     <activity android:name=".hu_act"
       android:label="Headunit Reloaded"
       android:launchMode="singleInstance"
-
+	  android:configChanges="orientation|screenSize|uiMode|screenLayout|layoutDirection|smallestScreenSize"
       android:screenOrientation="sensorLandscape"
       android:hardwareAccelerated="true"
-
+      android:resizeableActivity="false"
 android:theme="@style/AppTheme" 
       >
-
-      <intent-filter>
-        <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>
-        <category android:name="android.intent.category.DEFAULT" />
-<!-- 
+<!--
+	  <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"  android:resource="@xml/usb_device_filter"/>
 -->
+	  <meta-data android:name="android.dock_home" android:value="true" />
+      <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
-
+		<category android:name="android.intent.category.CAR_MODE" />
+		<category android:name="android.intent.category.CAR_DOCK"/> 
+		<category android:name="android.intent.category.DEFAULT"/>
+        <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+    </intent-filter>
+    <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/usb_device_filter" />  
 
 <!-- 
     <category android:name="android.intent.category.CAR_MODE" />
@@ -88,10 +94,10 @@ android:theme="@style/AppTheme"
     <category android:name="android.intent.category.DEFAULT" />
 -->
 
-      </intent-filter>
+  
 
-      <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
-        android:resource="@xml/usb_device_filter"/>
+
+		
 <!-- 
 -->
 
@@ -101,6 +107,22 @@ android:theme="@style/AppTheme"
 	  <activity android:name=".hu_pref" android:label="Settings"
         android:screenOrientation="landscape">
 	 </activity>
+	 
+<!--Crap USB_DEVICE_ATTACHED  cannot be passed to a blody service, without eternal prompt issue. We need to use
+an invisible activity... see: http://stackoverflow.com/questions/12388914/usb-device-access-pop-up-supression -->
+	 
+
+
+	 <service android:name=".hu_self_phone" ></service>
+
+	 
+	 <receiver  android:name=".hu_wifi_service" android:exported="true">
+      <intent-filter>
+			<action android:name="android.net.wifi.STATE_CHANGE" />
+			<action android:name="toggle_app_running_state" />
+      </intent-filter>
+	 </receiver>
+	 
   </application>
 </manifest>
 <!-- 
