@@ -11,6 +11,8 @@
 <!-- 
     tools:context=".hu_act"
 -->
+
+        
   <android.support.v4.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools" android:id="@+id/drawer_layout"
     android:layout_width="match_parent" android:layout_height="match_parent"
@@ -39,12 +41,13 @@
         >
         </LinearLayout>
 
+<!--		
         <LinearLayout
           android:id="@+id/ll_tv_log"
           android:visibility="visible"
           android:layout_width="match_parent"
-          android:layout_height="0dp"
-          android:layout_weight="8"
+          android:layout_height="match_parent"
+
           android:orientation="vertical">
             <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="fill_parent"
@@ -57,22 +60,87 @@
             </ScrollView>
           </LinearLayout>
 
+		  <LinearLayout
+          android:id="@+id/ll_tv_log"
+          android:visibility="visible"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:orientation="vertical">
+         
+				 <GridView
+				android:id="@+id/tv_log"
+				android:layout_width="match_parent"
+				android:layout_height="0dp"
+				android:layout_weight="1"
+				android:verticalSpacing="0dp"
+				android:horizontalSpacing="0dp"
+				android:stretchMode="columnWidth"
+				android:numColumns="3"/>
+
+
+        </LinearLayout>
+-->
+
+
+
+       <LinearLayout
+          android:id="@+id/ll_tv_log"
+          android:visibility="gone"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+
+          android:orientation="vertical">
+            
+              <TableLayout 
+          android:id="@+id/tv_log"
+          android:visibility="visible"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+		  android:paddingTop="10dp"
+		  android:paddingBottom="10dp"
+		  android:paddingLeft="5dp"
+		  android:paddingRight="5dp"
+         >
+         
+		 <TableRow 
+        android:layout_weight="1"
+        android:gravity="center">
+        <ImageButton android:id="@+id/imageButton1" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/self" android:padding="10dp" />
+        <ImageButton android:id="@+id/imageButton2" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/wifi" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton3" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/wifi_direct" android:padding="10dp"/>
+		</TableRow>
+
+				 <TableRow 
+        android:layout_weight="1"
+        android:gravity="center">
+        <ImageButton android:id="@+id/imageButton4" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/usb" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton5" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/settings" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton6" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/exit" android:padding="10dp"/>
+		</TableRow>
+
+        </TableLayout>
+            
+          </LinearLayout>
+
+		  
         <FrameLayout
           android:id="@+id/fl_tv_vid"
           android:visibility="visible"
           android:layout_width="match_parent"
-          android:layout_height="0dp"
+          android:layout_height="match_parent"
+		  android:background="#000000"
+		  
           android:layout_weight="8">
           <TextureView android:id="@+id/tv_vid"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+			android:layout_gravity="center_vertical"
           />
         </FrameLayout>
 
   <!-- Separator line above Presets -->
 
-        <View android:background="#000000" android:layout_width="match_parent" android:layout_height="4dip" />
-
+           <View android:background="#000000" android:layout_width="match_parent" android:layout_height="4dip" />    
 
         <!-- Presets -->
         <HorizontalScrollView android:id="@+id/hsv_presets" android:scrollbars="none" android:fadingEdge="none" android:layout_width="match_parent" android:layout_weight="2" android:layout_height="0dip"
@@ -185,6 +253,8 @@
     />
 
   </android.support.v4.widget.DrawerLayout>
+  
+
 
 <!-- 
 -->

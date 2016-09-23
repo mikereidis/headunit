@@ -1,0 +1,31 @@
+<resources>
+<string-array name="listArray">
+	<item>None</item>
+	<item>Self</item>
+	<item>Wifi</item>
+	<item>Wifi p2p</item>
+</string-array>
+
+<string-array name="listValues">
+    <item>0</item>
+    <item>2</item>
+    <item>3</item>
+    <item>4</item>
+</string-array>
+
+<string-array name="sensorArray">
+	<item>Use Light Sensor (if available)</item>
+	<item>Calculated Sunset/Sunrise</item>
+	<item>Day</item>
+	<item>Night</item>
+</string-array>
+
+<string-array name="sensorValues">
+    <item>0</item>
+    <item>1</item>
+    <item>2</item>
+    <item>3</item>
+</string-array>
+
+
+</resources>

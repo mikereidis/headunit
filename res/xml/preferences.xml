@@ -6,7 +6,7 @@
                       android:summary="Specify the IP of the phone"></EditTextPreference>
   <CheckBoxPreference android:title="Transport audio"
                       android:defaultValue="true"
-                      android:summary="Unchecking will keep the audio on the phone, highly recomanded to do so for Wifi connections."
+                      android:summary="Unchecking will keep the audio on the phone, highly recommended to do so for Wifi connections."
                       android:key="phoneaudio" />
    <ListPreference    android:title="Autostart mode"
                       android:summary="Select if you want to autostart any of the modes."
@@ -18,4 +18,42 @@
                       android:defaultValue="false"
                       android:summary="Enable 720P Video"
                       android:key="hires" />
+	<CheckBoxPreference android:title="Enable Car Mode"
+                      android:defaultValue="true"
+                      android:summary="Only disable this if you are not intending to use Self mode."
+                      android:key="carm" />
+	<CheckBoxPreference android:title="Software decoding"
+                      android:defaultValue="false"
+                      android:summary="Use software video deocder for unsupported hardware."
+                      android:key="h264" />
+	<CheckBoxPreference android:title="Stretch to full screen"
+                      android:defaultValue="true"
+                      android:summary="Uncheck to keep vide at exact aspect ratio."
+                      android:key="stretch_full" />
+	<CheckBoxPreference android:title="Start up on Wifi"
+                      android:defaultValue="false"
+                      android:summary="Automatically start/stop the app on Wifi."
+                      android:key="wifi_autorun" />
+	
+   <EditTextPreference android:title="Wifi SSID"
+                      android:key="ssid"
+					  android:defaultValue=""
+					  android:dependency="wifi_autorun"
+                      android:summary="Only start the app on specific Wifi (leave blank for any)"></EditTextPreference>
+
+	
+    <ListPreference android:title="Night mode  - Needs app restart"
+                      android:defaultValue="0"
+                      android:summary="How to switch between day/night mode"
+                      android:key="lightsens"
+					  android:entries="@array/sensorArray"
+                      android:entryValues="@array/sensorValues"  />
+		
+	<EditTextPreference android:title="Night switch threshold"
+                      android:key="luxval"
+					  android:defaultValue="200"
+					  android:inputType="number"
+					  
+                      android:summary="Specify the lux value to consider switch day/night mode"></EditTextPreference>
+   
 </PreferenceScreen>
