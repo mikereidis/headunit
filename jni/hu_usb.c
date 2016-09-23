@@ -202,8 +202,8 @@ int     LIBUSB_CALL libusb_bulk_transfer          (libusb_device_handle *dev_han
       logw ("Start dir: %s  ep: 0x%02x  buf: %p  len: %d  tmo: %d", dir, ep, buf, len, tmo);
     }
 //#ifndef NDEBUG
-    if (ena_hd_tra_send && ep == iusb_ep_out)
-      hex_dump ("US: ", 16, buf, len);
+//    if (ena_hd_tra_send && ep == iusb_ep_out)
+//      hex_dump ("US: ", 16, buf, len);
 //#endif
 
     int usb_err = -2;

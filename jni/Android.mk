@@ -42,12 +42,12 @@ else ifeq   ($(TARGET_ARCH_ABI), x86)
   include $(PREBUILT_STATIC_LIBRARY)
   include $(CLEAR_VARS)
   LOCAL_MODULE    := libssl
-  LOCAL_SRC_FILES := libsx86/libssl.so
-  include $(PREBUILT_SHARED_LIBRARY)
+  LOCAL_SRC_FILES := libsx86/libssl.a
+  include $(PREBUILT_STATIC_LIBRARY)
   include $(CLEAR_VARS)
   LOCAL_MODULE    := libcrypto
-  LOCAL_SRC_FILES := libsx86/libcrypto.so
-  include $(PREBUILT_SHARED_LIBRARY)
+  LOCAL_SRC_FILES := libsx86/libcrypto.a
+  include $(PREBUILT_STATIC_LIBRARY)
 else
   $(error Not a supported TARGET_ARCH_ABI: $(TARGET_ARCH_ABI))
 endif

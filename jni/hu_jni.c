@@ -16,6 +16,7 @@
 
   int aap_state_start_error = 0;
   int aap_state_starts  = 0;
+  
 
   int jni_aa_cmd (int cmd_len, char * cmd_buf, int res_max, char * res_buf, long myip_string, int transport_audio, int hires) {
     if (ena_log_extra || cmd_len >= 1)
@@ -27,8 +28,7 @@
     int vid_bufs = vid_buf_buf_tail - vid_buf_buf_head;
     int aud_bufs = vid_buf_buf_tail - vid_buf_buf_head;
 
-
-    if (cmd_buf != NULL && cmd_len == 3 && cmd_buf [0] == 121) {        // If onCreate() hu_tra:transport_start()
+	if (cmd_buf != NULL && cmd_len == 3 && cmd_buf [0] == 121) {        // If onCreate() hu_tra:transport_start()
       byte ep_in_addr  = cmd_buf [1];
       byte ep_out_addr = cmd_buf [2];                                   // Get endpoints passed
 
@@ -66,7 +66,29 @@
         chan = AA_CH_MIC;
       else if (cmd_len > 6 && cmd_buf [4] == 0x80 && cmd_buf [5] == 1)  // If Touch event...
         chan = AA_CH_TOU;
-     // else if (cmd_buf[0] == 8) {
+     else if (cmd_buf[0] == 8) {
+		 logd("we have to se force connection in place");
+		
+		  dont_send=1;
+		  return(-1);
+	 }
+	  else if (cmd_buf[0] == 9) {
+		 logd("Testing night toggle %d");
+		    
+			  byte rspds2 [] = {0x80, 0x03, 0x52, 2, 8, cmd_buf[1]};     
+              hu_aap_enc_send (1, rspds2, 6); 
+			/*
+			byte* rspds = malloc(sizeof(byte) * 6);
+		    rspds[0] = -128; 
+			rspds[1] = 0x03;
+			rspds[2] = 0x52; 
+			rspds[3] = 0x02;
+			rspds[4] = 0x08;
+			rspds[5]= 0x01;
+			hu_aap_enc_send(1, rspds, sizeof (byte) * 6); 	*/
+		  dont_send=1;
+		  return(0);
+	 }
 	//	chan == AA_CH_SEN; 
 //	logd("Detected night mode attempt");
 		
@@ -92,6 +114,10 @@
 //	cmd_buf[0]=1;
 //	dont_send=1;
 //	  }
+	 else if (cmd_buf[0] == 1)
+	 {
+		 chan == AA_CH_SEN; 
+	 }
 	  else                                                              // If Byebye or other control packet...
         chan = AA_CH_CTR;
       if (chan != cmd_buf [0]) {

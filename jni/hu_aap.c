@@ -12,6 +12,8 @@
   int iaap_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
   int use_audio=1;
   int hires=0;
+  int first_run=1;
+ 
   
   char * chan_get (int chan) {
     switch (chan) {
@@ -34,6 +36,8 @@
 	{
       if (tmo == -2)
 		  tmo = 2000;
+	  else if (tmo == -4)
+		  tmo = 150;
 	  return (hu_usb_recv  (buf, len, tmo));
 	}
     else if (transport_type == 2)
@@ -66,6 +70,7 @@
 	  logd("The audio transport should be now %d",transport_audio);
 	  use_audio=transport_audio;
 	  hires=hr;
+	  
 	int my_mode = 0;
     if (ep_in_addr == 255 && ep_out_addr == 255) {
       logd ("AA Wifi Direct");
@@ -111,7 +116,7 @@
 
   byte enc_buf [DEFBUF] = {0};                                          // Global encrypted transmit data buffer
 
-  byte assy [65536 * 16] = {0};                                         // Global assembly buffer for video fragments: Up to 1 megabyte   ; 128K is fine for now at 800*640
+  byte assy [65536 * 32] = {0};                                         // Global assembly buffer for video fragments: Up to 1 megabyte   ; 128K is fine for now at 800*640
   int assy_size = 0;                                                    // Current size
   int max_assy_size = 0;                                                // Max observed size needed:  151,000
 
@@ -196,15 +201,15 @@
     if (chan == AA_CH_MIC && buf [0] == 0 && buf [1] == 0) {            // If Mic PCM Data
       flags = 0x0b;                                                     // Flags = First + Last + Encrypted
     }
-
-#ifndef NDEBUG
+//hex_dump (" W/    hu_aap_enc_send: ", 16, buf, len);
+/*#ifndef NDEBUG
 //    if (ena_log_verbo && ena_log_aap_send) {
    // if (log_packet_info) { // && ena_log_aap_send)
       char prefix [DEFBUF] = {0};
       snprintf (prefix, sizeof (prefix), "S %d %s %1.1x", chan, chan_get (chan), flags);  // "S 1 VID B"
       int rmv = hu_aad_dmp (prefix, "HU", chan, flags, buf, len);
    // }
-#endif
+#endif*/
     int bytes_written = SSL_write (hu_ssl_ssl, buf, len);               // Write plaintext to SSL
     if (bytes_written <= 0) {
       loge ("SSL_write() bytes_written: %d", bytes_written);
@@ -271,13 +276,18 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
 
             // CH 1 Sensors:                      //cq/co[]
 //*
-                        0x0A, 4 + 4*1,//co: int, cm/cn[]
+                        0x0A, 4 + 4*4,//co: int, cm/cn[]
                                       0x08, AA_CH_SEN,
-                                      0x12, 4*1,
+                                      0x12, 4*4,
                                                           0x0A, 2,
-                                                                    0x08, 11, // SENSOR_TYPE_DRIVING_STATUS 12
+                                                                    0x08, 1, // SENSOR_TYPE_DRIVING_STATUS 12
+                                                          0x0A, 2,
+                                                                    0x08, 3, // SENSOR_TYPE_DRIVING_STATUS 12
+
 														  0x0A, 2,
-                                                                    0x08, 10, // SENSOR_TYPE_NIGHT_DATA 10
+                                                                    0x08, 10, // SENSOR_TYPE_DRIVING_STATUS 12
+														  0x0A, 2,
+                                                                    0x08, 11, // SENSOR_TYPE_NIGHT_DATA 10
 
 //*/
 /*  Requested Sensors: 10, 9, 2, 7, 6:
@@ -449,8 +459,8 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
       sd_buf_len -= sd_buf_aud_len;                                     // Remove audio outputs from service discovery response buf
    }
    if (hires==1)
-   {  sd_buf[27]=2;
-   sd_buf[35]=-16;} //Need to increase DPI
+   {  sd_buf[35]=2;
+   sd_buf[43]=-16;} //Need to increase DPI
     return (hu_aap_enc_send (chan, sd_buf, sd_buf_len));                // Send Service Discovery Response from sd_buf
   }
   int aa_pro_ctr_a06 (int chan, byte * buf, int len) {                  // Service Discovery Response
@@ -660,11 +670,15 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
       return (ret);
 
     if (chan == AA_CH_SEN) {                                            // If Sensor channel...
-      ms_sleep (2);//20);
+      ms_sleep (100);//20);
 	  //00012 00 0b 0b 4b ea 6  
-     // byte rspds [] = {0x80, 0x12, 0x00, 0x0b, 0x0b, 0x4b, 0x0e, 0x0a, 0x06};                      // Driving Status = 0 = Parked (1 = Moving)
-     // hu_aap_enc_send (chan, rspds, sizeof (rspds));           // Send Sensor Notification
-	 // ms_sleep (2);//20);
+	 // byte rspds [] = {0x80, 0x03, 0x72, 2, 8, 0};                      // Driving Status = 0 = Parked (1 = Moving)
+	
+     // hu_aap_enc_send (chan, rspds, sizeof (rspds)); 
+      byte rspds3 [] = {0x80, 0x03, 0x6a, 2, 8, 31};                      // Driving Status = 0 = Parked (1 = Moving)
+      hu_aap_enc_send (chan, rspds3, sizeof (rspds3));           // Send Sensor Notification
+	  ms_sleep (2);//20);
+	  // byte rspds2 [] = {0x80, 0x03, 0x3a, 2, 8, 1};     This sensor looks to be the passanger sensor (1 has passanger, 0 no passanger) or am I wrong?
 	  byte rspds2 [] = {0x80, 0x03, 0x6a, 2, 8, 0};     
       return (hu_aap_enc_send (chan, rspds2, sizeof (rspds2)));           // Send Sensor Notification
     }
@@ -1013,7 +1027,7 @@ ms: 337, 314                                                                    
     if (aud_rec_ena == 0)                                               // Return if audio recording not enabled
       return;
 
-//#ifndef NDEBUG
+/*#ifndef NDEBUG
     char * aud_rec_file = "/home/m/dev/hu/aa.pcm";
   #ifdef __ANDROID_API__
     aud_rec_file = "/sdcard/hu.pcm";
@@ -1025,7 +1039,7 @@ ms: 337, 314                                                                    
     if (aud_rec_fd >= 0)
       written = write (aud_rec_fd, buf, len);
     logv ("Audio written: %d", written);
-//#endif
+//#endif*/
   }
 
 
@@ -1061,14 +1075,7 @@ ms: 337, 314                                                                    
           logv ("iaap_audio_process ts: %d 0x%x  t2: %d 0x%x", ts, ts, t2, t2);
       }
       logv ("iaap_audio_process ts: %d 0x%x  t2: %d 0x%x", ts, ts, t2, t2);
-/*
-07-02 03:33:26.486 W/                        hex_dump( 1549): AUDIO:  00000000 00 00 00 00 00 79 3e 5c bd 60 45 ef 6c 1a 79 f6 
-07-02 03:33:26.486 W/                        hex_dump( 1549): AUDIO:      0010 a8 15 15 fe b3 14 8c fc e8 0c 34 f8 bf 02 ec 00 
-07-02 03:33:26.486 W/                        hex_dump( 1549): AUDIO:      0020 ab 0a 9a 0d a1 1d 88 0a ae 1e e5 03 a9 16 8d 10 
-07-02 03:33:26.486 W/                        hex_dump( 1549): AUDIO:      0030 d9 1f 3c 28 af 34 9b 35 e2 3e e2 36 fd 3c b4 34 
-07-02 03:33:26.487 D/              iaap_audio_process( 1549): iaap_audio_process ts: 31038 0x793e  t2: 31038 0x793e
-07-02 03:33:26.487 D/              iaap_audio_process( 1549): iaap_audio_process ts: 1046265184 0x3e5cbd60  t2: 1046265184 0x3e5cbd60
-*/
+
       iaap_audio_decode (chan, & buf [10], len - 10);//assy, assy_size);                                                                                    // Decode PCM audio fully re-assembled
     }
 
@@ -1080,14 +1087,7 @@ ms: 337, 314                                                                    
 // MaxUnack
 //loge ("????????????????????? !!!!!!!!!!!!!!!!!!!!!!!!!   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   vid_ack_ctr: %d  len: %d", vid_ack_ctr ++, len);
 int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respond with ACK (for all fragments ?)
-/*
-    int ret = 0;
-    //if (vid_ack_ctr ++ % 17 == 16)
-    if (vid_ack_ctr ++ % 2 == 1)
-      loge ("Drop ack to test !!!!!!!!!!!!!!!!!!!!!!!!!   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   vid_ack_ctr: %d  len: %d", vid_ack_ctr, len);
-    else
-      ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respond with ACK (for all fragments ?)
-//*/
+
     if (0) {
     }
     else if (flags == 11 && (msg_type == 0 || msg_type == 1) && (buf [10] == 0 && buf [11] == 0 && buf [12] == 0 && buf [13] == 1)) {  // If Not fragmented Video
@@ -1201,10 +1201,12 @@ logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio)
       logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (ret);                                                     // Done if error
     }
-
+	logd("got till here");
     byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 1};                    // Version Request
     ret = hu_aap_tra_set (0, 3, 1, vr_buf, sizeof (vr_buf));
+	logd("not sure about this?");
     ret = hu_aap_tra_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
+	logd("will like to know this as well");
     if (ret < 0) {
       loge ("Version request send ret: %d", ret);
       hu_aap_stop ();
@@ -1213,7 +1215,13 @@ logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio)
 
     byte buf [DEFBUF] = {0};
     errno = 0;
+	int ret_count=5;
+	do {
+    //ret = hu_aap_tra_recv (buf, sizeof (buf), 1000);                    // Get Rx packet from Transport:    Wait for Version Response
     ret = hu_aap_tra_recv (buf, sizeof (buf), 1000);                    // Get Rx packet from Transport:    Wait for Version Response
+	ret_count--;
+	logd ("Version response recv ret, attemp %d", ret_count);
+	} while (ret!=12 && ret_count>=0);
     if (ret <= 0) {
       loge ("Version response recv ret: %d", ret);
       hu_aap_stop ();
@@ -1242,12 +1250,14 @@ logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio)
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 //*/
 	
+	
     return (0);
   }
 
 
 
 /*
+http://stackoverflow.com/questions/11929773/compiling-the-latest-openssl-for-android/18577811#18577811
 http://stackoverflow.com/questions/22753221/openssl-read-write-handshake-data-with-memory-bio
 http://www.roxlu.com/2014/042/using-openssl-with-memory-bios
 https://www.openssl.org/docs/ssl/SSL_read.html
@@ -1277,7 +1287,7 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
       if (bytes_read <= 0) {
         loge ("ctr: %d  SSL_read() bytes_read: %d  errno: %d", ctr, bytes_read, errno);
         hu_ssl_ret_log (bytes_read);
-        ms_sleep (1);
+        //ms_sleep (1);
       }
       //logd ("ctr: %d  SSL_read() bytes_read: %d  errno: %d", ctr, bytes_read, errno);
     }
@@ -1291,14 +1301,14 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
     if (ena_log_verbo)
       logd ("ctr: %d  SSL_read() bytes_read: %d", ctr, bytes_read);
 
-#ifndef NDEBUG
+/*#ifndef NDEBUG
 ////    if (chan != AA_CH_VID)                                          // If not video...
       if (log_packet_info) {
         char prefix [DEFBUF] = {0};
         snprintf (prefix, sizeof (prefix), "R %d %s %1.1x", chan, chan_get (chan), flags);  // "R 1 VID B"
         int rmv = hu_aad_dmp (prefix, "AA", chan, flags, dec_buf, bytes_read);           // Dump decrypted AA
       }
-#endif
+#endif*/
 
     int prot_func_ret = iaap_msg_process (chan, flags, dec_buf, bytes_read);      // Process decrypted AA protocol message
     return (0);//prot_func_ret);
@@ -1326,25 +1336,30 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 */
 
   int hu_aap_recv_process () {                                          // 
-                                                                        // Terminate unless started or starting (we need to process when starting)
+                                                                    // Terminate unless started or starting (we need to process when starting)
     if (iaap_state != hu_STATE_STARTED && iaap_state != hu_STATE_STARTIN) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (-1);
     }
 
+	// if (first_run==1 && transport_type == 2) {
+			// hu_tcp_start_my_thread();
+			// first_run=0;
+	// }
+	
     byte * buf = rx_buf;
-	byte * temp_buf;
+
     int ret = 0;
     errno = 0;
-    //int min_size_hdr = 6;
+    int min_size_hdr = 6;
     int rx_len = sizeof (rx_buf);
-    //if (transport_type == 2)                                            // If wifi...
-    //  rx_len = min_size_hdr;                                           // Just get the header
+   if (transport_type == 2)                                            // If wifi...
+     rx_len = min_size_hdr;                                           // Just get the header
 
     int have_len = 0;                                                   // Length remaining to process for all sub-packets plus 4/8 byte headers
 
-    have_len = hu_aap_tra_recv (rx_buf, rx_len, iaap_tra_recv_tmo);     // Get Rx packet from Transport
-
+    have_len = hu_aap_tra_recv (rx_buf, rx_len, -4);     // Get Rx packet from Transport
+    
     if (have_len == 0) {                                                // If no data, then done w/ no data
       return (0);
     }
@@ -1356,13 +1371,13 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
     }  */
 
     while (have_len > 0) {                                              // While length remaining to process,... Process Rx packet:
-      if (ena_log_verbo) {
-        logd ("Recv while (have_len > 0): %d", have_len);
-        hex_dump ("LR: ", 16, buf, have_len);
-      }
+      // if (ena_log_verbo) {
+         // logd ("Recv while (have_len > 0): %d", have_len);
+        // hex_dump ("LR: ", 16, buf, have_len);
+      // }
       int chan = (int) buf [0];                                         // Channel
       int flags = buf [1];                                              // Flags
-
+	
       int enc_len = (int) buf [3];                                      // Encoded length of bytes to be decrypted (minus 4/8 byte headers)
       enc_len += ((int) buf [2] * 256);
 
@@ -1387,7 +1402,7 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
                                                                          //                               & jni/hu_uti.c:  #define vid_buf_BUFS_SIZE    65536 * 4
                                                                         // Up to 256 Kbytes// & src/ca/yyx/hu/hu_tro.java:    byte [] assy = new byte [65536 * 16];
                                                                         // & src/ca/yyx/hu/hu_tra.java:      res_buf = new byte [65536 * 4];
-        if (total_size > 160 * 1024)
+        if (total_size > 320 * 1024)
           logw ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
         else
           logv ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
@@ -1397,33 +1412,19 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 	  
       if (have_len < enc_len) {                                         // If we need more data for the full packet...
         int need_len = enc_len - have_len;
-		memmove(rx_buf, buf, have_len);
+	 if (transport_type != 2)   {
+	    memmove(rx_buf, buf, have_len);
 		buf = rx_buf;
-        //if (transport_type != 2 || rx_len != min_size_hdr)              // If NOT wifi...
-          //logd ("have_len: %d < enc_len: %d  need_len: %d", have_len, enc_len, need_len);
-
-		  //Possible Fix of buffer underrun... and wifi disconnection.
-		           // Move the buffer back to the start
-				  /* memset(rx_buf, 0, have_len);
-			       memmove(rx_buf, buf, have_len);
-			       buf = rx_buf;*/
-				    //size_t alloc = SIZE_MAX; 
-					//if (alloc < SIZE_MAX - BUFSIZ)
- 
-			
-			
-			/*memset(temp_buf, 0, have_len);
-			temp_buf=buf;
-			memset(buf, 0, have_len);
-			buf=temp_buf;*/
-			
-        int need_ret = hu_aap_tra_recv (& buf [have_len], need_len, -1);// Get Rx packet from Transport. Use -1 instead of iaap_tra_recv_tmo to indicate need to get need_len bytes
-                                                                        // Length remaining for all sub-packets plus 4/8 byte headers
+		 }
+		
+			//logd("current Buffer size: %d, and we try to feed in: %d",sizeof(buf),need_len);
+			int need_ret = hu_aap_tra_recv (& buf [have_len], need_len, -1);// Get Rx packet from Transport. Use -1 instead of iaap_tra_recv_tmo to indicate need to get need_len bytes
+			//logd("need len: %d, received len: %d",need_len,need_ret);
+			// Length remaining for all sub-packets plus 4/8 byte headers
         if (need_ret != need_len) {
 			logd ("have_len: %d < enc_len: %d  need_len: %d", have_len, enc_len, need_len);
-		
 		    loge ("Recv bytes: %d but we expected: %d", need_ret, need_len);
-			
+						
            hu_aap_stop ();
 
           return (-1);
@@ -1432,36 +1433,20 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
         have_len = enc_len;                                             // Length to process now = encoded length for 1 packet
       }
 
-      /*logd ("Calling iaap_recv_dec_process() with have_len: %d  enc_len: %d  buf: %p  chan: %d %s  flags: 0x%x  msg_type: %d", have_len, enc_len, buf, chan, chan_get (chan), flags, msg_type);
-      byte sum = 0;
-      int ctr = 0;     
-      for (ctr = 0; ctr < enc_len; ctr ++)
-        sum += buf [ctr];
-      logd ("iaap_recv_dec_process() sum: %d", sum);*/
+ 
       ret = iaap_recv_dec_process (chan, flags, buf, enc_len);          // Decrypt & Process 1 received encrypted message
       if (ret < 0) {                                                    // If error...
         loge ("Error iaap_recv_dec_process() ret: %d  have_len: %d  enc_len: %d  buf: %p  chan: %d %s  flags: 0x%x  msg_type: %d", ret, have_len, enc_len, buf, chan, chan_get (chan), flags, msg_type);
         hu_aap_stop ();
         return (ret);  
       }
-/*
-      if (log_packet_info) {
-        if (chan == AA_CH_VID && (flags == 8 || flags == 0x0a || msg_type == 0)) // || msg_type ==1))
-          ;
-        //else if (chan == AA_CH_VID && msg_type == 32768 + 4)
-        //  ;
-        else {
-          logd ("        OK iaap_recv_dec_process() ret: %d  have_len: %d  enc_len: %d  buf: %p  chan: %d %s  flags: 0x%x  msg_type: %d", ret, have_len, enc_len, buf, chan, chan_get (chan), flags, msg_type);
-          //logd ("--------------------------------------------------------");  // Empty line / 56 characters
-        }
-      }
-*/
+
       have_len -= enc_len;                                              // Consume processed sub-packet and advance to next, if any
       buf += enc_len;
       if (have_len != 0)
         logd ("iaap_recv_dec_process() more than one message   have_len: %d  enc_len: %d", have_len, enc_len);
     }
-
+	memset(rx_buf, 0, sizeof(rx_buf));
     return (ret);                                                       // Return value from the last iaap_recv_dec_process() call; should be 0
   }
 /*
