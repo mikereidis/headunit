@@ -23,8 +23,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.Map;
+
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
+import android.database.Cursor;
 
 
 
@@ -41,7 +43,16 @@ public class hu_tra {
   private UsbDevice       m_usb_device;
 
   private boolean         m_autolaunched = false;
-
+  private int trans_aud;
+  private int hi_res;
+  private long ip_result;
+  private boolean is_stopped;
+  private boolean initial_day_night = false;
+  private int last_state = -1;
+ 
+  private String last_mode; 
+ // private boolean do_what;
+  
   private static final int AA_CH_CTR = 0;                               // Sync with hu_tra.java, hu_aap.h and hu_aap.c:aa_type_array[]
   private static final int AA_CH_SEN = 1;
   private static final int AA_CH_VID = 2;
@@ -115,7 +126,7 @@ Internal classes:
 
   private int     test_len = 0;
   private boolean test_rdy = false;
-  private int night_mode = 9;
+
 
   public void test_send (byte [] buf, int len) {
     test_buf = buf;
@@ -123,15 +134,13 @@ Internal classes:
     test_rdy = true;
   }  
   
-  public void send_night_mode (int nm) {
-	  night_mode=nm;
-	
-  }
-
+  private long lastheartbeat = 0;
+  private long lastnightswitch = 0;
   private boolean m_mic_active = false;
   private boolean touch_sync = true;//      // Touch sync times out within 200 ms on second touch with TCP for some reason.
+    private volatile boolean m_stopping = false; 
   private final class tra_thread extends Thread {                       // Main Transport Thread
-    private volatile boolean m_stopping = false;                        // Set true when stopping
+                     // Set true when stopping
     public tra_thread () {
       super ("tra_thread");                                             // Name thread
     }
@@ -155,9 +164,7 @@ Internal classes:
 //            hu_uti.ms_sleep (1);
             continue;
           }
-        //}
-
-//hu_uti.loge ("2");
+       
         if (! m_stopping && ret >= 0 && m_mic_active) {                 // If Mic active...
           mic_audio_len = m_hu_act.mic_audio_read (mic_audio_buf, hu_act.m_mic_bufsize);
           if (mic_audio_len >= 64) {                                    // If we read at least 64 bytes of audio data
@@ -199,10 +206,10 @@ Internal classes:
 
 //hu_uti.loge ("5");
       }
-
+	if (!is_stopped)
       byebye_send ();                                                   // If m_stopping then... Byebye
     }
-
+	
     public void quit () {
       m_stopping = true;                                                // Terminate thread
     }
@@ -212,12 +219,39 @@ Internal classes:
 
     if (m_hu_act.disable_video_started_set)
       m_hu_act.ui_video_started_set (true);                             // Enable video/disable log view
-
+	is_stopped=false;
+	m_stopping=false;
+  //Get settings for start
+  	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
+	//do_what=SP.getBoolean("lostconnection",true);
+	//hu_uti.logd("DO_what value is = " + do_what);
+	//use_light=SP.getBoolean("lightsens",false);
+	boolean hires=SP.getBoolean("hires",false);
+	boolean transport_audio=SP.getBoolean("phoneaudio",false);
+	trans_aud=0;
+	if (transport_audio) {trans_aud=1;}
+	hi_res=0;
+	if (hires) {hi_res=1;}
+	if (myip_string == "127.0.0.1")
+		trans_aud=0;
+	ip_result = 0;
+	if (myip_string!="") {
+	String[] ipAddressInArray = myip_string.split("\\.");
+	for (int i = 0; i < ipAddressInArray.length; i++) {
+	int power = 3 - i;
+	int ip = Integer.parseInt(ipAddressInArray[power]);
+	ip_result += ip * Math.pow(256, power);
+	}
+	}
+	lastheartbeat=0;
+  
+  
+  
     byte [] cmd_buf = {121, -127, 2};                                   // Start Request w/ m_ep_in_addr, m_ep_out_addr
     cmd_buf [1] = (byte) m_ep_in_addr;
     cmd_buf [2] = (byte) m_ep_out_addr;
     int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null,myip_string);           // Send: Start USB & AA
-
+	
     if (ret == 0) {                                                     // If started OK...
       hu_uti.logd ("aa_cmd_send ret: " + ret);
       aap_running = true;
@@ -230,17 +264,24 @@ Internal classes:
   }
 
 
+  private int night_toggle (int state_to) {
+	byte x = (byte) state_to;
+	byte [] data = {9, x, 0, 0, 0, 0, 0, 0};          
+	int ret = aa_cmd_send (data.length, data, 0, null,"");           
+	//hu_uti.ms_sleep (100);   
+	return(0);
+  }
   
   private int byebye_send () {                                          // Send Byebye request. Called only by transport_stop (), tra_thread:run()
     hu_uti.logd ("");
     byte [] cmd_buf = {AA_CH_CTR, 0x0b, 0, 0, 0, 0x0f, 0x08, 0};          // Byebye Request:  000b0004000f0800  00 0b 00 04 00 0f 08 00
     int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null,"");           // Send
-    hu_uti.ms_sleep (100);                                              // Wait a bit for response
+    //hu_uti.ms_sleep (100);                                              // Wait a bit for response
     return (ret);
   }
 
   private byte [] fixed_cmd_buf = new byte [256];
-  private byte [] fixed_res_buf = new byte [65536 * 16];
+  private byte [] fixed_res_buf = new byte [65536 * 32];
                                                                         // Send AA packet/HU command/mic audio AND/OR receive video/output audio/audio notifications
   private int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf, String myip_string) {
     //synchronized (this) {
@@ -254,31 +295,43 @@ Internal classes:
       res_len = res_buf.length;
     }
 
-    
-	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
-	boolean hires=SP.getBoolean("hires",false);
-	boolean transport_audio=SP.getBoolean("phoneaudio",false);
-	int trans_aud=0;
-	if (transport_audio) {trans_aud=1;}
-	int hi_res=0;
-	if (hires) {hi_res=1;}
-	if (myip_string == "127.0.0.1")
-		trans_aud=0;
-	long ip_result = 0;
-	if (myip_string!="") {
-	String[] ipAddressInArray = myip_string.split("\\.");
-	for (int i = 0; i < ipAddressInArray.length; i++) {
-	int power = 3 - i;
-	int ip = Integer.parseInt(ipAddressInArray[power]);
-	ip_result += ip * Math.pow(256, power);
-	}
-	}
+ 
 	
-	
-	//hu_uti.logd("Ip value in long =" + Long.toString(ip_result));
-	int ret = native_aa_cmd (cmd_len, cmd_buf, res_len, res_buf, ip_result, trans_aud, hi_res);       // Send a command (or null command)
 
-    if (ret == 1) {                                                     // If mic stop...
+	int ret = native_aa_cmd (cmd_len, cmd_buf, res_len, res_buf, ip_result, trans_aud, hi_res);       // Send a command (or null command)
+	//hu_uti.logd("CMD_buf len is:" + cmd_len + " and ret is: " + ret);	
+	if (ret < 0) {
+	 hu_uti.logd("Connection lost performin preset action!");
+    
+      
+	 //  if (do_what)
+		   //m_hu_act.finish();
+			m_hu_act.video_started_set(false);
+			if (!is_stopped)
+			{
+		   byte [] cmd_buf_finisf = {AA_CH_CTR, 0x0b, 0, 0, 0, 0x0f, 0x08, 0};
+			ret = aa_cmd_send (cmd_buf_finisf.length, cmd_buf_finisf, 0, null,"");  
+			}
+			is_stopped=true;
+
+		   
+		   
+
+       
+	}
+	else if (ret==0) {
+		if ((((System.currentTimeMillis() - lastheartbeat)/1000)>40) && lastheartbeat!=0) {
+					hu_uti.logd("no heartbeat...!");
+				
+						m_hu_act.video_started_set(false);
+						
+						m_stopping=true;
+						return(-1);
+		
+		}
+		
+	}
+    else if (ret == 1) {                                                     // If mic stop...
       hu_uti.logd ("Microphone Stop");
       m_mic_active = false;
       m_hu_act.mic_audio_stop ();
@@ -305,13 +358,33 @@ Internal classes:
       return (0);
     }
     else if (ret > 0) {                                                 // Else if audio or video returned...
+	  lastheartbeat=System.currentTimeMillis();
       ByteBuffer bb = ByteBuffer.wrap (res_buf);
       bb.limit (ret);
       bb.position (0);
       if (m_hu_act != null)
         m_hu_act.media_decode (bb);                                     // Decode audio or H264 video content
-    }
+    //Check if we need to change Day/night
+	// Assuming day and checking if need night...
+	//hu_uti.logd("CAR NIGHT MODE: " + m_context.getResources().getString(R.string.isNight) +  "hu_act.night_mode==1" + hu_act.night_mode);
+	if (((System.currentTimeMillis() - lastnightswitch)/1000)>20) {
+	int daynight=0;
+	if (hu_act.night_mode==3)
+		daynight=1;
+	else if ((hu_act.night_mode==1 && m_context.getResources().getString(R.string.isNight).equals("Yes")) || (hu_act.night_mode==0 && !hu_act.sensor_supported && m_context.getResources().getString(R.string.isNight).equals("Yes")))
+		daynight=1;
+	else if (hu_act.night_mode==0 && hu_act.sensor_supported && hu_act.curr_lux<=hu_act.lux_t)
+		daynight=1;
+	if (daynight!=last_state)
+	{
+	last_state=daynight;
+	night_toggle(daynight);
+	lastnightswitch=System.currentTimeMillis();
+	}
+	}
+	}
     return (ret);
+
     //}
   }
 
@@ -411,27 +484,27 @@ Internal classes:
     hu_uti.logd ("intent: " + intent);// + "  action: " + action);
 
     IntentFilter filter = new IntentFilter ();
-    //IntentFilter filter2 = new IntentFilter ("gb.xxy.hr");
+   // IntentFilter filter2 = new IntentFilter ("gb.xxy.hr");
     filter.addAction (UsbManager.ACTION_USB_DEVICE_ATTACHED);
     filter.addAction (UsbManager.ACTION_USB_DEVICE_DETACHED);
     filter.addAction (hu_uti.str_usb_perm);                             // Our App specific Intent for permission request
     m_usb_receiver = new usb_receiver ();                               // Register BroadcastReceiver for USB attached/detached
     Intent first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter);
-    //first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter2);
+  //  first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter2);
     hu_uti.logd ("first_sticky_intent: " + first_sticky_intent);
 
 	
 	
 	
 	
-    if (action != null &&
-          action.equals (UsbManager.ACTION_USB_DEVICE_ATTACHED)) {      // If launched by a USB connection event... (Do nothing, let BCR handle)
+   // if (action != null &&
+    //      action.equals (UsbManager.ACTION_USB_DEVICE_ATTACHED)) {      // If launched by a USB connection event... (Do nothing, let BCR handle)
       //m_autolaunched = true;
-	  hu_act.autostart = 9;
-      UsbDevice device = intent.<UsbDevice>getParcelableExtra (UsbManager.EXTRA_DEVICE);
-      hu_uti.logd ("Launched by USB connection event device: " + device);
-   }
-    else {                                                              // Else if we were launched manually, look through the USB device list...
+	 
+   //   UsbDevice device = intent.<UsbDevice>getParcelableExtra (UsbManager.EXTRA_DEVICE);
+   //   hu_uti.logd ("Launched by USB connection event device: " + device);
+  // }
+   // else {                                                              // Else if we were launched manually, look through the USB device list...
       Map<String, UsbDevice> device_list = null;
       try {
         device_list = m_usb_mgr.getDeviceList ();                       // Emulator:  java.lang.NullPointerException: Attempt to invoke interface method 'void android.hardware.usb.IUsbManager.getDeviceList(android.os.Bundle)' on a null object reference
@@ -459,18 +532,19 @@ Internal classes:
 //          }
         }
       }
-    }
+   // }
     hu_uti.logd ("end");
     return (ret);
   }
 
-  private boolean aap_running = false;
+  public boolean aap_running = false;
   public void transport_stop () {                                       // USB Transport Stop. Called only by hu_act.all_stop()
     hu_uti.logd ("m_usb_receiver: " + m_usb_receiver + "  aap_running: " + aap_running);
 
     if (! aap_running)
       return;
 
+	if (!is_stopped)
     byebye_send ();                                                     // Terminate AA Protocol with ByeBye
 
     aap_running = false;
@@ -479,7 +553,11 @@ Internal classes:
       m_tra_thread.quit ();                                             // Terminate Transport Thread using it's quit() API
 
     if (m_usb_receiver != null)
-      m_context.unregisterReceiver (m_usb_receiver);
+	{try 
+		{m_context.unregisterReceiver (m_usb_receiver);}
+		 catch (Throwable e) {
+		 hu_uti.loge("nothing to be unregistered....");	}
+		 }
     m_usb_receiver = null;
 
     usb_disconnect ();                                                  // Disconnect
@@ -494,30 +572,29 @@ Internal classes:
       UsbDevice device = intent.<UsbDevice>getParcelableExtra (UsbManager.EXTRA_DEVICE);
       hu_uti.logd ("USB BCR intent: " + intent);
 
-	//  if (intent.hasExtra("message")) {
+//	  if (intent.hasExtra("message")) {
 	// hu_uti.logd ("Launched by USB connection event device: " + device);
-	//  String message = intent.getStringExtra("message");
+//	  String message = intent.getStringExtra("message");
 
 //	  String x= "0";x=message.substring(0,4);
 //	  String y= "0";y=message.substring(4);
-//	  	  hu_uti.logd("Emil receiver: Got message: " + message +" x:"+x+"y: "+y);
+//	 	  hu_uti.logd("Emil receiver: Got message: " + message );
 //	   touch_send((byte)0,Integer.parseInt(x),Integer.parseInt(y));
 //	   hu_uti.ms_sleep(100);
 //	   touch_send((byte)1,Integer.parseInt(x),Integer.parseInt(y));
 	  //touch_send(1,480,10);
   
-		//	int my_len = message.length()-1;
-		//	byte[] data = new byte[my_len / 2+1];
-		//	data[0]=(byte)Integer.parseInt(message.substring(0,1));
+			//int my_len = message.length()-1;
+			//byte[] data = new byte[my_len / 2+1];
+			//data[0]=(byte)Integer.parseInt(message.substring(0,1));
 			
-			
-			
-			/*message=message.substring(1);
-			
-			for (int mi = 0; mi < my_len; mi += 2) {
-				data[mi / 2+1] = (byte) ((Character.digit(message.charAt(mi), 16) << 4)
-									 + Character.digit(message.charAt(mi+1), 16));
-								}
+			// int my_len = message.length();
+			// byte[] data = new byte[(my_len / 2)+1];
+			// data[0]=9;
+			// for (int mi = 0; mi < my_len; mi += 2) {
+				 // data[(mi / 2)+1] = (byte) ((Character.digit(message.charAt(mi), 16) << 4)
+									 // + Character.digit(message.charAt(mi+1), 16));
+								// }
 								
 	/*			if (message=="1")
 				{					
@@ -543,12 +620,15 @@ Internal classes:
 			
 			 //byte [] cmd_buf = {AA_CH_CTR, 0x0b, 0, 0, 0, 0x0f, 0x08, 0};          // Byebye Request:  000b0004000f0800  00 0b 00 04 00 0f 08 00
 			//ret = aa_cmd_send (14 + mic_audio_len, ba_mic, 0, null,"",true); 	
-			int ret = aa_cmd_send (data.length, data, 0, null,"",true);           // Send
-			 hu_uti.ms_sleep (100);  */          					
+			*/
+			// int ret = aa_cmd_send (data.length, data, 0, null,"");           // Send
+			 // hu_uti.ms_sleep (100);            					
 	//  }
       if (device != null) {
         String action = intent.getAction ();
-
+		
+	
+		
         if (action.equals (UsbManager.ACTION_USB_DEVICE_DETACHED)) {    // If detach...
           usb_detach_handler (device);                                  // Handle detached device
         }
@@ -558,7 +638,7 @@ Internal classes:
         }
 
         else if (action.equals (hu_uti.str_usb_perm)) {                 // If Our App specific Intent for permission request...
-                                                                        // If permission granted...
+                                                          // If permission granted...
           if (intent.getBooleanExtra (UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
             hu_uti.logd ("USB BCR permission granted");
             hu_uti.logd ("m_hu_act.sys_ui_hide (): " + m_hu_act.sys_ui_hide ());
@@ -574,10 +654,14 @@ Internal classes:
   }
 
   private boolean usb_attach_handler (UsbDevice device, boolean add) {     // Handle attached device. Called only by:  transport_start() on autolaunch or device find, and...
-                                                                                                                 // usb_receiver() on USB grant permission or USB attach
+     
+
     String usb_dev_name = usb_dev_name_get (device);
     hu_uti.logd ("usb_attach_handler m_usb_connected: " + m_usb_connected);// + "  usb_dev_name: " + usb_dev_name);  // device: " + device + "  
-
+    if (m_usb_connected)
+	{
+	  hu_act.autostart = 9;	
+	}
     int dev_vend_id = device.getVendorId ();                            // mVendorId=2996               HTC
     int dev_prod_id = device.getProductId ();                           // mProductId=1562              OneM8
  
@@ -588,7 +672,12 @@ Internal classes:
     if (dev_vend_id == 0x0835)                                          // Ignore "Action Star Enterprise Co., Ltd" = USB Hub
       return (false);
 
-    if (add)
+	  // Check if the device is whitelisted or not
+	  // if (usb_dev_name.equals(""))
+		  // return (false);
+	 
+		
+	if (add)
       usb_add (usb_dev_name, device);                                   // Add USB Device to list
 
     //private boolean auto_start = true;
@@ -604,6 +693,7 @@ Internal classes:
       hu_uti.logd ("Connected so start JNI");
       //hu_uti.ms_sleep (2000);                                         // Wait to settle
       //hu_uti.logd ("connected done sleep");
+	  m_hu_act.video_started_set(true);
       jni_aap_start ("");                                                 // Start JNI Android Auto Protocol and Main Thread
     }
     else
@@ -624,7 +714,7 @@ Internal classes:
       Toast.makeText (m_context, "DISCONNECTED !!!", Toast.LENGTH_LONG).show ();
 
       hu_uti.ms_sleep (1000);                                           // Wait a bit
-      //android.os.Process.killProcess (android.os.Process.myPid ());     // Kill self
+      android.os.Process.killProcess (android.os.Process.myPid ());     // Kill self
       m_hu_act.finish ();
       return;
     }
@@ -1033,18 +1123,18 @@ Internal classes:
       usb_dev_name += "\n" + dev_prod;*/
 
     usb_dev_name += vend_id_name_get (dev_vend_id);
-    usb_dev_name += ":";
+    //usb_dev_name += ":";
     usb_dev_name += prod_id_name_get (dev_prod_id);
-    usb_dev_name += "\n";
+   // usb_dev_name += "\n";
 
     usb_dev_name += hu_uti.hex_get ((short) dev_vend_id);
-    usb_dev_name += ":";
+   // usb_dev_name += ":";
     usb_dev_name += hu_uti.hex_get ((short) dev_prod_id);
-    usb_dev_name += "\n";
+   // usb_dev_name += "\n";
 
     usb_dev_name += "" + dev_dev_id;
 
-    return (usb_dev_name);
+    return (dev_ser);
   }
 
   private int usb_list_num = 0;
@@ -1065,6 +1155,7 @@ Internal classes:
 
     m_ep_in_addr  = 255;
     m_ep_out_addr = 0;  // USB Force
+	m_hu_act.video_started_set(true);
     jni_aap_start ("");
   }
 

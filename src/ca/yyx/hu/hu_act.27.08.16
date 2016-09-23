@@ -1,7 +1,6 @@
+
 package gb.xxy.hr;
 
-import android.content.res.Configuration;
-import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.content.Context;
 import android.content.BroadcastReceiver;
@@ -88,16 +87,11 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.GridView;
 import android.widget.Toast;
 import android.widget.TableLayout;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
-import android.content.DialogInterface;
-import android.app.AlertDialog;
 
 
 public class hu_act extends Activity          implements TextureView.SurfaceTextureListener {
 
+  public static boolean off_hook=false;
   private static hu_tra        m_hu_tra;        // Transport API
 
   private TableLayout      m_tv_log;
@@ -127,7 +121,10 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 
    private double        m_virt_vid_wid = 800f;
    private double        m_virt_vid_hei = 480f;
-   private MediaFormat format=null;
+  //private double        m_virt_vid_wid = 1280f;
+ // private double        m_virt_vid_hei =  720f;
+  //private double        m_virt_vid_wid = 1920f;
+  //private double        m_virt_vid_hei = 1080f;
 
   private boolean       m_scr_land     = true;
 
@@ -136,14 +133,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   public static String myip="127.0.0.1";
   public static int last_conn_type=0;
   public static int autostart=0;
-  public static int night_mode=0;
-  public static int lux_t=0;
-  public static int curr_lux=0;
-  public static boolean sensor_supported = true;
   public static Intent saved_intent;
-  private static SensorManager mSensorManager;
-  private static Sensor mLight;
-  
   private static final int PRESET_LEN_TOT = 13;
   private static final int PRESET_LEN_FIX = 10;
   public  static final int PRESET_LEN_USB = PRESET_LEN_TOT - PRESET_LEN_FIX;  // Room left over for USB entries
@@ -156,7 +146,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   private ImageButton button4;
   private ImageButton button5;
   private ImageButton button6;
-  private int h264_wait=0;
   
 
   public void presets_update (String [] usb_list_name) {                // Update Presets. Called only by hu_act:usb_add() & hu_act:usb_del()
@@ -239,10 +228,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   protected void onCreate (Bundle savedInstanceState) {
     super.onCreate (savedInstanceState);
 	setContentView (R.layout.layout);
-	PreferenceManager.setDefaultValues(m_context,R.xml.preferences,false);
-	startService(new Intent(this, hu_usb_service.class));
 	
-		
 	if (m_tcp_connected)
 		
 		{
@@ -281,7 +267,16 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 					Log.d("hu","Couldn't get the video texture");
 				}
 			//Re-create the power manager (is it really needed?)
-			 
+			 try {
+				  m_pwr_mgr = (PowerManager) getSystemService (POWER_SERVICE);
+				  if (m_pwr_mgr != null)
+					m_wakelock = m_pwr_mgr.newWakeLock (PowerManager.PARTIAL_WAKE_LOCK, "MyWakelockTag");
+				  if (m_wakelock != null)
+					m_wakelock.acquire ();                                          // Android M exception for WAKE_LOCK
+				}
+				catch (Throwable t) {
+				  hu_uti.loge ("Throwable: " + t);
+				}
 
 			
 		}
@@ -291,19 +286,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 	
 	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
 	boolean hires=SP.getBoolean("hires",false);
-	
-
-	night_mode=Integer.parseInt(SP.getString("lightsens","0"));
-	lux_t=Integer.parseInt(SP.getString("luxval","50"));
-	mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-    mLight = mSensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
-     if(mLight != null && night_mode == 0){
-     
-      mSensorManager.registerListener(LightSensorListener, mLight, SensorManager.SENSOR_DELAY_NORMAL);
-      
-     }else{
-     sensor_supported=false;
-     }
 	
 	if (hires) {
 		m_virt_vid_wid=1280f;
@@ -428,7 +410,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
       hu_uti.loge ("Throwable: " + t);
     }
 
-    //msg_display ();
+    msg_display ();
 
    
 
@@ -446,7 +428,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
           hu_uti.logd ("Before car_mode_start()");
           starting_car_mode = true;
 		  m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
-		  m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO); 
           car_mode_start ();
           hu_uti.logd ("After  car_mode_start()");
         }
@@ -473,23 +454,47 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 	UiChangeListener();
 	addListenerOnButton();
 	
-	mLocalBroadcastManager = LocalBroadcastManager.getInstance(this);
-    IntentFilter killIntentFilter = new IntentFilter();
-    killIntentFilter.addAction("kill_switch");
-    mLocalBroadcastManager.registerReceiver(mBroadcastReceiver, killIntentFilter);
-
 	
-	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
-	toggle_running.setAction("toggle_app_running_state");
-	toggle_running.putExtra("curr",1);
-	sendBroadcast(toggle_running);
 	
+	startService(new Intent(this, hu_self_phone.class));
 	}
   }
 
   private static boolean starting_car_mode = false;
 
 	
+  private void msg_display () {
+    String intro1_str = "HEADUNIT Reloaded for Android Auto (tm) -in Memory of Michael A. Reid -\n" +
+      "You accept all liability for any reason by using, distributing, doing, or not doing anything else in respect of this software.\n" +
+      "This software is experimental and may be distracting. Use it only for testing at this time. Do NOT use this software while operating a vehicle of any sort.\n";
+    screen_logd (intro1_str);
+
+    String intro2_str = "";
+    if (this.getPackageManager ().hasSystemFeature (android.content.pm.PackageManager.FEATURE_USB_HOST))
+      intro2_str = "This device/ROM must support USB Host Mode, or you need to use a Wifi Connection\n";
+    else
+      intro2_str = "This device/ROM doesn't seem to support USB HOST MODE!!! You might be limited to Wifi connection mode only.\n";
+    screen_logd (intro2_str);
+
+    String intro3_str = "" +
+      "See XDA thread for latest info and ask any question\n" +
+      "\n" +
+      "Connect this device to USB OTG cable\n" +
+      "Connect USB OTG cable to regular phone USB cable\n" +
+      "Connect regular USB cable to Android 5+ device running Google Android Auto app\n" +
+      "Respond OK to prompts\n" +
+      "First Time with Android Auto check phone screen to see if apps need to be updated or prompts accepted\n" +
+      "If success, this device screen will show Android Auto User Interface and other device screen should go dark\n" +
+      "\n" +
+      "A LOT of USB and OTG cables will not work\n" +
+      "It can be tricky to get working the first time\n" +
+	  "For Wifi, set up a tethering on your phone, open Android Auto on the phone, tap 20 times the header of the AA app.\n"+
+	  "Once you gain developer status in the AA app, select 'Start Head Unit Server' and connect the tablet to the tethered Wifi\n"+
+      "\n";
+    screen_logd (intro3_str);
+  }
+
+
   // Continuing methods in lifecycle order:
 
   @Override
@@ -503,6 +508,8 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   protected void onResume () {
     super.onResume ();
     hu_uti.logd ("--- ");
+	if (off_hook)
+		off_hook=false;
     //wifi_resume ();                                                   // Register the broadcast receiver with the intent values to be matched
   
   }
@@ -559,11 +566,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   }
 
   @Override
-  public void onConfigurationChanged(Configuration newConfig) {
-    super.onConfigurationChanged(newConfig);
-	Log.d("HU-SERVICE","Prevent onDestroy being called due to orientation and other changes....");
- }
-  @Override
   public void onRestart () {                                            // Restart comes between Stop and Start or when returning to the app
     super.onRestart ();
     hu_uti.logd ("--- ");
@@ -580,51 +582,24 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     }
   }
 
-  
- 
-  
-  
-  
-  
   @Override
   protected void onDestroy () {
     super.onDestroy ();
     hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
-	if (!m_tcp_connected) {
+if (!m_tcp_connected) {
     all_stop ();
 	 
 // No need of reseting the USB
 //    if (! hu_uti.file_get ("/sdcard/hu_usbr_disable"))
 //      hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
-    try {
-	stopService(new Intent(this, hu_self_phone.class));
-	}
-	 catch (Throwable e) {
-        Log.e ("HU-SERVICE", e.getMessage ());
-      }
-	try {  
-	mLocalBroadcastManager.unregisterReceiver(mBroadcastReceiver);
-	}
-	 catch (Throwable e) {
-        Log.e ("HU-SERVICE", e.getMessage ());
-      }
-	 try { 
-	 mSensorManager.unregisterListener(LightSensorListener);
-	 }
-	 catch (Throwable e) {
-		Log.e ("HU-SERVICE", e.getMessage ()); 
-	 }
-    //if (! starting_car_mode)
-	  m_uim_mgr.disableCarMode(0);
-  
-  	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
-	toggle_running.setAction("toggle_app_running_state");
-	toggle_running.putExtra("curr",0);
-	sendBroadcast(toggle_running);
-	
-     // android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
-  }
 
+    if (! starting_car_mode)
+      android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
+  }
+  else if (off_hook) {
+		m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
+		Log.d("HU-SERVICE", "OnPause method called with off_hook");
+	}
   }
 
     // Color:
@@ -721,7 +696,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     if (idx == 0) {                                                     // If Exit...
       m_uim_mgr.disableCarMode(0);
 	  m_tcp_connected=false;
-	  
+	  stopService(new Intent(this, hu_self_phone.class));
 
       //android.os.Process.killProcess (android.os.Process.myPid ());// Kill this process completely for "super cleanup"
       finish ();                                                        // Hangs with TCP
@@ -826,10 +801,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 	  last_conn_type=con_type;
       ui_video_started_set (true);                                      // Enable video/disable log view
 
-	  if (con_type==2)
-	  {
-		startService(new Intent(this, hu_self_phone.class));
-	  }
       if (! async_wifi_start) {
         wifi_long_start (con_type);
         return;
@@ -1310,43 +1281,23 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 
     //if (m_sur_tex != null)    //onRestart
     //  return;
-	
-	
+
     m_sur_tex = sur_tex;
 
     if (height > 1080) {                                              // Limit surface height to 1080 or N7 2013 won't work: width: 1920  height: 1104    Screen 1200x1920, nav = 96 pixels
       hu_uti.loge ("height: " + height);
       height = 1080;
     }
-	
-	if (!PreferenceManager.getDefaultSharedPreferences(m_context).getBoolean("stretch_full",true))
-	{
-	//WE need to resize the layout, let's do some maths
-	float aspect_ratio=(float)1.66;
-	if (m_virt_vid_wid!=800f) 
-		aspect_ratio=(float)1.77;
-	height=(int) (width/aspect_ratio);
-	m_tv_vid.setLayoutParams(new FrameLayout.LayoutParams(width, height, 17));
-	}
-	
     try {
-		if (! PreferenceManager.getDefaultSharedPreferences(m_context).getBoolean("h264",false)) 
-        { m_codec = MediaCodec.createDecoderByType ("video/avc");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
-		Log.d("HU-SERVICE","Using Hardware decoing");
-		}
-		else {
-			Log.d("HU-SERVICE","Using Software decoing");
-      m_codec = MediaCodec.createByCodecName("OMX.google.h264.decoder");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
-	  h264_wait=10000;
-		}
+      m_codec = MediaCodec.createDecoderByType ("video/avc");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
     }
     catch (Throwable t) {
       hu_uti.loge ("Throwable creating video/avc decoder: " + t);
     }
     try {
       m_codec_buf_info = new BufferInfo ();                         // Create Buffer Info
-      format = MediaFormat.createVideoFormat ("video/avc", width, height);
-      m_codec.configure (format, new Surface (m_sur_tex), null, 0);               // Configure codec for H.264 with given width and height, no crypto and no flag (ie decode)
+      MediaFormat format = MediaFormat.createVideoFormat ("video/avc", width, height);
+      m_codec.configure (format, new Surface (sur_tex), null, 0);               // Configure codec for H.264 with given width and height, no crypto and no flag (ie decode)
       m_codec.start ();                                             // Start codec
     }
     catch (Throwable t) {
@@ -1399,32 +1350,21 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   private boolean codec_input_provide (ByteBuffer content) {            // Called only by media_decode() with new NAL unit in Byte Buffer
     if (hu_uti.ena_log_verbo)
       hu_uti.logv ("content: " + content);    //hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
-//hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
+
     try {
       final int index = m_codec.dequeueInputBuffer (1000000);           // Get input buffer with 1 second timeout
       if (index < 0) {
-		  //hu_uti.logd("index was less than 0 returning error");
-		  if (h264_wait>0)
-		  {
-		   m_codec.flush();    
-		   m_codec_input_bufs = null;
-		   m_codec_buf_info=null;
-		   m_codec_buf_info = new BufferInfo ();   
-		return (false);                                                 // Done with "No buffer" error
-		  }
+        return (false);                                                 // Done with "No buffer" error
       }
-	  	 // hu_uti.logd("step 2");
       if (m_codec_input_bufs == null) {
         m_codec_input_bufs = m_codec.getInputBuffers ();                // Set m_codec_input_bufs if needed
       }
-		//hu_uti.logd("step 3");
+
       final ByteBuffer buffer = m_codec_input_bufs [index];
       final int capacity = buffer.capacity ();
       buffer.clear ();
-	  // hu_uti.logd("step 3");
       if (content.remaining () <= capacity) {                           // If we can just put() the content...
         buffer.put (content);                                           // Put the content
-		 //hu_uti.logd("step 4");
       }
       else {                                                            // Else... (Should not happen ?)
         hu_uti.loge ("content.hasRemaining (): " + content.hasRemaining () + "  capacity: " + capacity);
@@ -1435,7 +1375,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
         content.limit (limit);                                          // Restore original limit
       }
       buffer.flip ();                                                   // Flip buffer for reading
-     // hu_uti.logd ("steo 5 buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
+      //hu_uti.logd ("buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
 
       m_codec.queueInputBuffer (index, 0, buffer.limit (), 0, 0);       // Queue input buffer for decoding w/ offset=0, size=limit, no microsecond timestamp and no flags (not end of stream)
       return (true);                                                    // Processed
@@ -1450,7 +1390,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     //hu_uti.logd ("");
     int index = -777;
     for (;;) {                                                          // Until no more buffers...
-      index = m_codec.dequeueOutputBuffer (m_codec_buf_info, h264_wait);        // Dequeue an output buffer but do not wait
+      index = m_codec.dequeueOutputBuffer (m_codec_buf_info, 0);        // Dequeue an output buffer but do not wait
       if (index >= 0)
         m_codec.releaseOutputBuffer (index, true /*render*/);           // Return the buffer to the codec
       else if (index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)         // See this 1st shortly after start. API >= 21: Ignore as getOutputBuffers() deprecated
@@ -1459,7 +1399,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 			m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
 	  	  }
       else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)          // See this 2nd shortly after start. Output format changed for subsequent data. See getOutputFormat()
-		hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
+        hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
       else if (index == MediaCodec.INFO_TRY_AGAIN_LATER)
         break;
       else
@@ -2044,23 +1984,7 @@ public void UiChangeListener()
             }
         });
     }
- 
-private final static SensorEventListener LightSensorListener = new SensorEventListener(){
-public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
   
- }
-
- public void onSensorChanged(SensorEvent event) {
-  if( event.sensor.getType() == Sensor.TYPE_LIGHT){
-	  if (curr_lux-Math.round(event.values[0])<-10 || curr_lux-Math.round(event.values[0])>10)
-  curr_lux=Math.round(event.values[0]);
-  }
-  
- }
-	 };
- 
- 
   public boolean onKeyUp(int keyCode, KeyEvent event) {
 	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
 	boolean hires=SP.getBoolean("hires",false);
@@ -2274,21 +2198,6 @@ public void onAccuracyChanged(Sensor sensor, int accuracy) {
     return (0);
   }
 
-  
-    LocalBroadcastManager mLocalBroadcastManager;
-    BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
-
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if(intent.getAction().equals("kill_switch")){
-				Log.d("HU-SERVICE","Kill switch called");
-				m_tcp_connected=false;
-                finish();
-            }
-        }
-    };
-  
-  
   private int wifi_init () {  // call from onCreate()
     m_wifidir_mgr = (WifiP2pManager) getSystemService (Context.WIFI_P2P_SERVICE);
     m_wifidir_chan = m_wifidir_mgr.initialize (this, getMainLooper (), null);

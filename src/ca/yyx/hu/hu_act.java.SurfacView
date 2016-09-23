@@ -1,5 +1,8 @@
 package gb.xxy.hr;
 
+
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 import android.content.res.Configuration;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
@@ -92,11 +95,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.content.DialogInterface;
-import android.app.AlertDialog;
 
-
-public class hu_act extends Activity          implements TextureView.SurfaceTextureListener {
+public class hu_act extends Activity          implements SurfaceHolder.Callback {
 
   private static hu_tra        m_hu_tra;        // Transport API
 
@@ -106,19 +106,23 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   private LinearLayout  m_ll_tv_ext;
 
   private FrameLayout   m_fl_tv_vid;
-  private TextureView   m_tv_vid;
-
+ // private TextureView   m_tv_vid;
+  private SurfaceView mSurfaceView;
+  
   private HorizontalScrollView  m_hsv_presets;
 
   // These fields are guarded by m_surf_codec_lock. This is to ensure that the surface lifecycle is respected.
   // Although decoding happens on the transport thread, we are not allowed to access the surface after it is destroyed by the UI thread so we need to stop the codec immediately.
   private final Object    m_surf_codec_lock = new Object ();
   private static SurfaceTexture  m_sur_tex  = null;
+
   //private Surface         m_surface  = null;
   //private int             m_sur_wid  = 0;
   //private int             m_sur_hei  = 0;
 
-  private MediaCodec    m_codec;
+  private static MediaCodec    m_codec=null;
+  private static boolean m_codec_started = false;
+  private static boolean is_app_foreground = true;
   private ByteBuffer [] m_codec_input_bufs;
   private BufferInfo    m_codec_buf_info;
 
@@ -127,7 +131,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 
    private double        m_virt_vid_wid = 800f;
    private double        m_virt_vid_hei = 480f;
-   private MediaFormat format=null;
+
 
   private boolean       m_scr_land     = true;
 
@@ -156,7 +160,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   private ImageButton button4;
   private ImageButton button5;
   private ImageButton button6;
-  private int h264_wait=0;
   
 
   public void presets_update (String [] usb_list_name) {                // Update Presets. Called only by hu_act:usb_add() & hu_act:usb_del()
@@ -240,9 +243,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     super.onCreate (savedInstanceState);
 	setContentView (R.layout.layout);
 	PreferenceManager.setDefaultValues(m_context,R.xml.preferences,false);
-	startService(new Intent(this, hu_usb_service.class));
-	
-		
 	if (m_tcp_connected)
 		
 		{
@@ -263,19 +263,24 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 			
 			
 			//Re-Creacte the video and re-setup the touch listeners.
-			m_tv_vid = (TextureView) findViewById (R.id.tv_vid);
-				if (m_tv_vid != null) {
+			//m_tv_vid = (TextureView) findViewById (R.id.tv_vid);
+			mSurfaceView = (SurfaceView) findViewById(R.id.surface);
+				//if (m_tv_vid != null) {
+				if (mSurfaceView != null) {
 					Log.d("hu","Trying to restore the video");
-				  m_tv_vid.setSurfaceTextureListener (hu_act.this);
+				  //m_tv_vid.setSurfaceTextureListener (hu_act.this);
+				   mSurfaceView.getHolder().addCallback(hu_act.this);
 
-				  m_tv_vid.setOnTouchListener (new View.OnTouchListener () {
+				 // m_tv_vid.setOnTouchListener (new View.OnTouchListener () {
+				  mSurfaceView.setOnTouchListener (new View.OnTouchListener () {
 						@Override
 						public boolean onTouch (View v, MotionEvent event) {
 						  touch_send (event);
 						  return (true);
 						}
 					  });
-				  m_tv_vid.setSurfaceTexture(m_sur_tex);
+				//  m_tv_vid.setSurfaceTexture(m_sur_tex);
+				//  mSurfaceView.setSurfaceTexture(m_sur_tex);
 				}
 				else {
 					Log.d("hu","Couldn't get the video texture");
@@ -401,10 +406,14 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 
     m_fl_tv_vid = (FrameLayout) findViewById (R.id.fl_tv_vid);
 
-    m_tv_vid = (TextureView) findViewById (R.id.tv_vid);
-    if (m_tv_vid != null) {
-      m_tv_vid.setSurfaceTextureListener (hu_act.this);
-      m_tv_vid.setOnTouchListener (new View.OnTouchListener () {
+    //m_tv_vid = (TextureView) findViewById (R.id.tv_vid);
+    mSurfaceView  = (SurfaceView) findViewById (R.id.surface);
+    // if (m_tv_vid != null) {
+    if (mSurfaceView != null) {
+      // m_tv_vid.setSurfaceTextureListener (hu_act.this);
+      mSurfaceView.getHolder().addCallback(hu_act.this);
+      //m_tv_vid.setOnTouchListener (new View.OnTouchListener () {
+      mSurfaceView.setOnTouchListener (new View.OnTouchListener () {
         @Override
         public boolean onTouch (View v, MotionEvent event) {
           touch_send (event);
@@ -446,7 +455,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
           hu_uti.logd ("Before car_mode_start()");
           starting_car_mode = true;
 		  m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
-		  m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO); 
           car_mode_start ();
           hu_uti.logd ("After  car_mode_start()");
         }
@@ -478,12 +486,6 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     killIntentFilter.addAction("kill_switch");
     mLocalBroadcastManager.registerReceiver(mBroadcastReceiver, killIntentFilter);
 
-	
-	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
-	toggle_running.setAction("toggle_app_running_state");
-	toggle_running.putExtra("curr",1);
-	sendBroadcast(toggle_running);
-	
 	}
   }
 
@@ -550,6 +552,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   protected void onPause () {
     super.onPause ();
     hu_uti.logd ("--- ");
+	is_app_foreground=false;
   }
 
   @Override
@@ -567,10 +570,11 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   public void onRestart () {                                            // Restart comes between Stop and Start or when returning to the app
     super.onRestart ();
     hu_uti.logd ("--- ");
-
-    if (m_sur_tex != null && m_tv_vid != null) {
+	is_app_foreground=true;
+    // if (m_sur_tex != null && m_tv_vid != null) {
+     if (m_sur_tex != null && mSurfaceView != null) {
       try {
-        m_tv_vid.setSurfaceTexture (m_sur_tex);                         // java.lang.IllegalArgumentException: Trying to setSurfaceTexture to the same SurfaceTexture that's already set.
+      //  mSurfaceView.setSurfaceTexture (m_sur_tex);                         // java.lang.IllegalArgumentException: Trying to setSurfaceTexture to the same SurfaceTexture that's already set.
       }
       catch (Throwable e) {
         Log.e ("setSurfaceTexture: ", e.getMessage ());
@@ -615,14 +619,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 		Log.e ("HU-SERVICE", e.getMessage ()); 
 	 }
     //if (! starting_car_mode)
-	  m_uim_mgr.disableCarMode(0);
-  
-  	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
-	toggle_running.setAction("toggle_app_running_state");
-	toggle_running.putExtra("curr",0);
-	sendBroadcast(toggle_running);
-	
-     // android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
+      android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
   }
 
   }
@@ -1057,31 +1054,7 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
       bb = ByteBuffer.wrap (bc);                                        // Wrap chunk byte array bc to create byte buffer bb
 
       media_decode (bb);    	  // Decode audio or H264 video content
-	  /*	
-		int pos = bb.position ();
-		int siz = bb.remaining ();
-		int last = pos + siz - 1;
-		byte [] b_test = bb.array ();
-	
-		byte b1 = b_test [pos + 3];
-		byte bl = b_test [last];
-		
-		
-		Socket socket = null;
-        String host = "192.168.1.3";
-		try {
-        socket = new Socket(host, 3268);
-		} catch (IOException ex) {
-            System.out.println("Can't accept client connection. ");
-        }
-		try {
-        OutputStream out = socket.getOutputStream();
-		out.write (b_test, pos, siz); 
-		} catch (IOException ex) {
-            System.out.println("Can't accept client connection. ");
-        }
-		
-		*/
+	 
       hu_uti.ms_sleep (20);                                             // Wait a frame
     }
 
@@ -1240,7 +1213,8 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 
   private double vid_wid_get () {                                       // Called only by touch_send()
     double vid_wid  = 0;
-    vid_wid = m_tv_vid.getWidth ();
+    vid_wid = mSurfaceView.getWidth ();
+    // vid_wid = m_tv_vid.getWidth ();
 
     /*hu_uti.logd ("vid_wid: "  + vid_wid);
     vid_wid = m_tv_vid.getMeasuredWidth ();                             // Same value
@@ -1249,7 +1223,8 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   }
   private double vid_hei_get () {                                       // Called only by touch_send()
     double vid_hei  = 0;
-    vid_hei = m_tv_vid.getHeight ();
+    // vid_hei = m_tv_vid.getHeight ();
+    vid_hei = mSurfaceView.getHeight ();
 
     /*hu_uti.logd ("vid_hei: "  + vid_hei);
     vid_hei = m_tv_vid.getMeasuredHeight ();                            // Same value
@@ -1305,49 +1280,43 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     // Video: TextureView
 
   @Override                                                             // Called after onCreate(), which calls "m_tv_vid.setSurfaceTextureListener (hu_act.this);"
-  public void onSurfaceTextureAvailable (SurfaceTexture sur_tex, int width, int height) {
-    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);  // N9: width: 2048  height: 1253
+  // public void onSurfaceTextureAvailable (SurfaceTexture sur_tex, int width, int height) {
+   public void surfaceCreated(SurfaceHolder holder)  {
+	   Log.d("HU-SERVICE","Surfcae was created");
+    // hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);  // N9: width: 2048  height: 1253
 
-    //if (m_sur_tex != null)    //onRestart
-    //  return;
-	
-	
-    m_sur_tex = sur_tex;
+    // //if (m_sur_tex != null)    //onRestart
+    // //  return;
 
-    if (height > 1080) {                                              // Limit surface height to 1080 or N7 2013 won't work: width: 1920  height: 1104    Screen 1200x1920, nav = 96 pixels
-      hu_uti.loge ("height: " + height);
-      height = 1080;
-    }
+   // // m_sur_tex = sur_tex;
+
+
+   
 	
-	if (!PreferenceManager.getDefaultSharedPreferences(m_context).getBoolean("stretch_full",true))
-	{
-	//WE need to resize the layout, let's do some maths
-	float aspect_ratio=(float)1.66;
-	if (m_virt_vid_wid!=800f) 
-		aspect_ratio=(float)1.77;
-	height=(int) (width/aspect_ratio);
-	m_tv_vid.setLayoutParams(new FrameLayout.LayoutParams(width, height, 17));
-	}
-	
-    try {
-		if (! PreferenceManager.getDefaultSharedPreferences(m_context).getBoolean("h264",false)) 
-        { m_codec = MediaCodec.createDecoderByType ("video/avc");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
-		Log.d("HU-SERVICE","Using Hardware decoing");
-		}
-		else {
-			Log.d("HU-SERVICE","Using Software decoing");
-      m_codec = MediaCodec.createByCodecName("OMX.google.h264.decoder");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
-	  h264_wait=10000;
-		}
+  }
+
+  
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format_2, int width, int height) {
+		 //mSurfaceHolder = holder;
+		    Log.d("HU-SERVICE","surfaceChanged called");
+		      if (height > 1080) {                                              // Limit surface height to 1080 or N7 2013 won't work: width: 1920  height: 1104    Screen 1200x1920, nav = 96 pixels
+       hu_uti.loge ("height: " + height);
+       height = 1080;
+     }
+	 if (m_codec == null) {
+		 try {
+      m_codec = MediaCodec.createDecoderByType ("video/avc");       // Create video codec: ITU-T H.264 / ISO/IEC MPEG-4 Part 10, Advanced Video Coding (MPEG-4 AVC)
     }
     catch (Throwable t) {
       hu_uti.loge ("Throwable creating video/avc decoder: " + t);
     }
     try {
       m_codec_buf_info = new BufferInfo ();                         // Create Buffer Info
-      format = MediaFormat.createVideoFormat ("video/avc", width, height);
-      m_codec.configure (format, new Surface (m_sur_tex), null, 0);               // Configure codec for H.264 with given width and height, no crypto and no flag (ie decode)
+      MediaFormat format = MediaFormat.createVideoFormat ("video/avc", width, height);
+      m_codec.configure (format, holder.getSurface(), null, 0);               // Configure codec for H.264 with given width and height, no crypto and no flag (ie decode)
       m_codec.start ();                                             // Start codec
+	  m_codec_started=true;
     }
     catch (Throwable t) {
       hu_uti.loge ("Throwable: " + t);
@@ -1368,24 +1337,40 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
 	    m_fl_tv_vid.setVisibility   (View.GONE);                     
         m_ll_tv_log.setVisibility   (View.VISIBLE);  	
 	}
+    }
 	
-  }
+	else
+	{
+		if (!m_codec_started && is_app_foreground) {
+		m_codec.reset();
+	  MediaFormat format = MediaFormat.createVideoFormat ("video/avc", width, height);
+	  m_codec.configure (format, holder.getSurface(), null, 0);               // Configure codec for H.264 with given width and height, no crypto and no flag (ie decode)
+      m_codec.start ();    
+     m_codec_started=true;	  
+		}	  
+	}
+	}
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+		
+		m_codec_started=false;
+    }
+	
+  // @Override
+  // public void onSurfaceTextureSizeChanged (SurfaceTexture sur_tex, int width, int height) {        // ignore
+    // hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);
+  // }
 
-  @Override
-  public void onSurfaceTextureSizeChanged (SurfaceTexture sur_tex, int width, int height) {        // ignore
-    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);
-  }
+  // @Override
+  // public boolean onSurfaceTextureDestroyed (SurfaceTexture sur_tex) {
+    // hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
+    // return (m_sur_tex==null);                                                     // Prevent destruction of SurfaceTexture
+  // }
 
-  @Override
-  public boolean onSurfaceTextureDestroyed (SurfaceTexture sur_tex) {
-    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
-    return (m_sur_tex==null);                                                     // Prevent destruction of SurfaceTexture
-  }
-
-  @Override
-  public void onSurfaceTextureUpdated (SurfaceTexture sur_tex) {             // Called many times per second when video changes, so ignore
-    //hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
-  }
+  // @Override
+  // public void onSurfaceTextureUpdated (SurfaceTexture sur_tex) {             // Called many times per second when video changes, so ignore
+    // //hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
+  // }
 
 
   private void codec_stop () {
@@ -1399,32 +1384,25 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
   private boolean codec_input_provide (ByteBuffer content) {            // Called only by media_decode() with new NAL unit in Byte Buffer
     if (hu_uti.ena_log_verbo)
       hu_uti.logv ("content: " + content);    //hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
-//hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
+
     try {
+		Log.d("HU-SERVICE","Debug -1");
       final int index = m_codec.dequeueInputBuffer (1000000);           // Get input buffer with 1 second timeout
       if (index < 0) {
-		  //hu_uti.logd("index was less than 0 returning error");
-		  if (h264_wait>0)
-		  {
-		   m_codec.flush();    
-		   m_codec_input_bufs = null;
-		   m_codec_buf_info=null;
-		   m_codec_buf_info = new BufferInfo ();   
-		return (false);                                                 // Done with "No buffer" error
-		  }
+        return (false);                                                 // Done with "No buffer" error
       }
-	  	 // hu_uti.logd("step 2");
+	  Log.d("HU-SERVICE","Debug -2");
       if (m_codec_input_bufs == null) {
         m_codec_input_bufs = m_codec.getInputBuffers ();                // Set m_codec_input_bufs if needed
       }
-		//hu_uti.logd("step 3");
+     Log.d("HU-SERVICE","Debug -3");
       final ByteBuffer buffer = m_codec_input_bufs [index];
       final int capacity = buffer.capacity ();
       buffer.clear ();
-	  // hu_uti.logd("step 3");
+	  Log.d("HU-SERVICE","Debug -4");
       if (content.remaining () <= capacity) {                           // If we can just put() the content...
         buffer.put (content);                                           // Put the content
-		 //hu_uti.logd("step 4");
+		Log.d("HU-SERVICE","Debug -5");
       }
       else {                                                            // Else... (Should not happen ?)
         hu_uti.loge ("content.hasRemaining (): " + content.hasRemaining () + "  capacity: " + capacity);
@@ -1434,10 +1412,12 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
         buffer.put (content);
         content.limit (limit);                                          // Restore original limit
       }
+	  Log.d("HU-SERVICE","Debug -6");
       buffer.flip ();                                                   // Flip buffer for reading
-     // hu_uti.logd ("steo 5 buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
+      //hu_uti.logd ("buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
 
       m_codec.queueInputBuffer (index, 0, buffer.limit (), 0, 0);       // Queue input buffer for decoding w/ offset=0, size=limit, no microsecond timestamp and no flags (not end of stream)
+	  Log.d("HU-SERVICE","Debug -7");
       return (true);                                                    // Processed
     }
     catch (Throwable t) {
@@ -1450,16 +1430,16 @@ public class hu_act extends Activity          implements TextureView.SurfaceText
     //hu_uti.logd ("");
     int index = -777;
     for (;;) {                                                          // Until no more buffers...
-      index = m_codec.dequeueOutputBuffer (m_codec_buf_info, h264_wait);        // Dequeue an output buffer but do not wait
+      index = m_codec.dequeueOutputBuffer (m_codec_buf_info, 0);        // Dequeue an output buffer but do not wait
       if (index >= 0)
-        m_codec.releaseOutputBuffer (index, true /*render*/);           // Return the buffer to the codec
+        m_codec.releaseOutputBuffer (index, m_codec_started /*render*/);           // Return the buffer to the codec
       else if (index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)         // See this 1st shortly after start. API >= 21: Ignore as getOutputBuffers() deprecated
 	  { hu_uti.logd ("INFO_OUTPUT_BUFFERS_CHANGED: "+myip);
 	   if (myip=="127.0.0.1")
 			m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
 	  	  }
       else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)          // See this 2nd shortly after start. Output format changed for subsequent data. See getOutputFormat()
-		hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
+        hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
       else if (index == MediaCodec.INFO_TRY_AGAIN_LATER)
         break;
       else
@@ -2059,7 +2039,6 @@ public void onAccuracyChanged(Sensor sensor, int accuracy) {
   
  }
 	 };
- 
  
   public boolean onKeyUp(int keyCode, KeyEvent event) {
 	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
