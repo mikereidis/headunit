@@ -18,10 +18,7 @@
                       android:defaultValue="false"
                       android:summary="Enable 720P Video"
                       android:key="hires" />
-	<CheckBoxPreference android:title="Enable Car Mode"
-                      android:defaultValue="true"
-                      android:summary="Only disable this if you are not intending to use Self mode."
-                      android:key="carm" />
+	
 	<CheckBoxPreference android:title="Software decoding"
                       android:defaultValue="false"
                       android:summary="Use software video deocder for unsupported hardware."
@@ -30,6 +27,11 @@
                       android:defaultValue="true"
                       android:summary="Uncheck to keep vide at exact aspect ratio."
                       android:key="stretch_full" />
+	<CheckBoxPreference android:title="Auto increase volume on speed."
+                      android:defaultValue="true"
+                      android:summary="When activated the app will increase the audio volume with 1 step at each of the following speed limits, when slowing down it will also decrease the media volume with 1 step: \n 1) At 30 KM/H (~ 20 MPH) \n 2) At 50 KM/H (~ 30 MPH) \n 3) At 80 KM/H (~ 50MPH) \n 4) At 110 KM/H (~ 70MPH) \n 5) At 130 KM/H (~ 80MPH)"
+                      android:key="auto_adjust_audio" />
+					  
 	<CheckBoxPreference android:title="Start up on Wifi"
                       android:defaultValue="false"
                       android:summary="Automatically start/stop the app on Wifi."
