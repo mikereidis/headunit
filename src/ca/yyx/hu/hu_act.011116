@@ -10,7 +10,7 @@ import android.graphics.Color;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.HorizontalScrollView;
-
+import android.graphics.Matrix;
 import android.os.PowerManager;
 import android.app.UiModeManager;
 import android.widget.ListView;
@@ -18,27 +18,39 @@ import android.widget.ArrayAdapter;
 import android.widget.AdapterView;
 import android.net.wifi.p2p.*;
 import android.net.wifi.p2p.WifiP2pManager.*;
-
+import java.net.ServerSocket;
 import android.os.AsyncTask;
-
+import java.io.File;
+import android.os.Environment;
+import android.net.wifi.WifiManager;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.ConnectException;
+import android.app.PendingIntent;
 
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
-
+import android.media.MediaRecorder;
 import android.media.AudioRecord;
 import android.app.Activity;
-
+import android.content.pm.PackageManager;
+import android.graphics.Rect;
 import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaFormat;
-
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.Surface;
-
+import android.view.SurfaceHolder;
 import android.graphics.SurfaceTexture;
 import android.view.TextureView;
 import android.view.View;
@@ -47,32 +59,46 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.GridView;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
-
+import java.util.Timer;
+import android.hardware.Camera;
+import android.media.CamcorderProfile;
 import android.support.v4.widget.DrawerLayout;
-
+import android.os.Build;
+import android.os.Handler;
 import android.view.Gravity;
-
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.ViewGroup;
+import android.support.v4.app.Fragment;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
-
+import android.os.Bundle;
+import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.GridView;
+import android.widget.Toast;
 import android.widget.TableLayout;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import java.util.Calendar;
-
-import android.location.LocationListener;
-import android.location.LocationManager;
-import android.location.Location;
+import android.content.DialogInterface;
+import android.app.AlertDialog;
 
 
-public class hu_act extends Activity  implements TextureView.SurfaceTextureListener, LocationListener {
+public class hu_act extends Activity          implements TextureView.SurfaceTextureListener {
 
-  private static gb.xxy.hr.hu_tra m_hu_tra;        // Transport API
+  private static hu_tra        m_hu_tra;        // Transport API
 
   private TableLayout      m_tv_log;
   private LinearLayout  m_ll_tv_log;
@@ -104,9 +130,6 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
    private MediaFormat format=null;
 
   private boolean       m_scr_land     = true;
-  private static long lastnightswitch = 0;
-  private static long last_calculate = 0;
-  private static int last_state = -1;
 
     // Presets:
   public static int last_possition=3;
@@ -115,13 +138,12 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   public static int autostart=0;
   public static int night_mode=0;
   public static int lux_t=0;
-  public static int last_speed=0;
-  private static boolean auto_adjust_audio=true;
-  
+  public static int curr_lux=0;
+  public static boolean sensor_supported = true;
   public static Intent saved_intent;
   private static SensorManager mSensorManager;
   private static Sensor mLight;
-  private static boolean connection_ok=false;
+  
   private static final int PRESET_LEN_TOT = 13;
   private static final int PRESET_LEN_FIX = 10;
   public  static final int PRESET_LEN_USB = PRESET_LEN_TOT - PRESET_LEN_FIX;  // Room left over for USB entries
@@ -140,7 +162,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   public void presets_update (String [] usb_list_name) {                // Update Presets. Called only by hu_act:usb_add() & hu_act:usb_del()
     int idx = 0;
     for (idx = 0; idx < PRESET_LEN_USB; idx ++) {
-      gb.xxy.hr.hu_uti.logd ("idx: " + idx + "  name: " + usb_list_name [idx]);
+      hu_uti.logd ("idx: " + idx + "  name: " + usb_list_name [idx]);
       if (m_preset_tv != null)
         m_preset_tv [idx + PRESET_LEN_FIX].setText (usb_list_name [idx]);
 
@@ -164,12 +186,12 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   }
   
   private void screen_logd (final String str) {
-    gb.xxy.hr.hu_uti.logd (str);
+    hu_uti.logd (str);
     //m_tv_log.append (str + "\n");       // android.view.ViewRootImpl$CalledFromWrongThreadException: Only the original thread that created a view hierarchy can touch its views.
     //tv_log_append (str + "\n");           // at gb.xxy.hr.hu_act.media_decode(hu_act.java:564)
   }
   private void screen_loge (final String str) {
-    gb.xxy.hr.hu_uti.loge (str);
+    hu_uti.loge (str);
     //m_tv_log.append ("ERROR: " + str + "\n");
     //tv_log_append ("ERROR: " + str + "\n");
   }
@@ -201,13 +223,13 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   private class drawer_item_click_listener implements ListView.OnItemClickListener {
     @Override
     public void onItemClick (AdapterView parent, View view, int position, long id) {
-      gb.xxy.hr.hu_uti.logd ("position: " + position + "  id: " + id);
+      hu_uti.logd ("position: " + position + "  id: " + id);
 
       m_dl_drawer.closeDrawer (Gravity.START);
 
       function_select (position);
 
-      gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+      hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
     }
   }
 
@@ -267,42 +289,36 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 	else {
     Log.d ("hu", "Headunit for Android Auto (tm) - Copyright 2011-2015 Michael A. Reid. All Rights Reserved...");
 	
-
-		
 	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
 	boolean hires=SP.getBoolean("hires",false);
-	auto_adjust_audio=SP.getBoolean("auto_adjust_audio",false);
+	
 
 	night_mode=Integer.parseInt(SP.getString("lightsens","0"));
 	lux_t=Integer.parseInt(SP.getString("luxval","50"));
 	mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
     mLight = mSensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
-	if(mLight == null)
-		night_mode=1;
-	
-	
-	
-	if (night_mode == 1 || auto_adjust_audio)
-			 {
-		    LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-			if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
-				locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 50, this);
-		}
+     if(mLight != null && night_mode == 0){
+     
+      mSensorManager.registerListener(LightSensorListener, mLight, SensorManager.SENSOR_DELAY_NORMAL);
+      
+     }else{
+     sensor_supported=false;
+     }
 	
 	if (hires) {
 		m_virt_vid_wid=1280f;
 		m_virt_vid_hei=720f;
 	}
 
-    gb.xxy.hr.hu_uti.logd ("--- savedInstanceState: " + savedInstanceState);
-    gb.xxy.hr.hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
+    hu_uti.logd ("--- savedInstanceState: " + savedInstanceState);
+    hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
 	saved_intent = getPackageManager().getLaunchIntentForPackage("gb.xxy.hr");
-    //gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ()); // Too early
+    //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ()); // Too early
     //car_mode_start ();
 
     m_scr_hei = getWindowManager ().getDefaultDisplay ().getHeight ();
     m_scr_wid  = getWindowManager ().getDefaultDisplay ().getWidth ();
-    gb.xxy.hr.hu_uti.logd ("m_scr_wid: "  + m_scr_wid + "  m_scr_hei: " + m_scr_hei);
+    hu_uti.logd ("m_scr_wid: "  + m_scr_wid + "  m_scr_hei: " + m_scr_hei);
 
     android.graphics.Point size = new android.graphics.Point ();
     getWindowManager ().getDefaultDisplay ().getSize (size);
@@ -314,7 +330,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     else
       m_scr_land = false;
 
-    gb.xxy.hr.hu_uti.logd ("m_scr_wid: "  + m_scr_wid  + "  m_scr_hei: " + m_scr_hei  + "  m_scr_land: " + m_scr_land);
+    hu_uti.logd ("m_scr_wid: "  + m_scr_wid  + "  m_scr_hei: " + m_scr_hei  + "  m_scr_land: " + m_scr_land);
 
 //N9 portrait:
 //06-08 00:44:24.390 D/                onCreate( 6082): m_scr_wid: 1536.0  m_scr_hei: 1952.0
@@ -334,7 +350,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     m_lv_drawer.setOnItemClickListener (new drawer_item_click_listener ());
 //*/
 
-    gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());           // closes drawer
+    hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());           // closes drawer
 
 
         // set a custom shadow that overlays the main content when the drawer opens
@@ -346,7 +362,8 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
     try {
       lite_clr = Color.parseColor ("#ffffffff");                        // lite like PS
-
+      dark_clr = Color.parseColor ("#ffa3a3a3");                        // grey like RT
+      blue_clr = Color.parseColor ("#ff32b5e5");                        // ICS Blue
     }
     catch (Throwable e) {
       e.printStackTrace ();
@@ -357,7 +374,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
     getWindow ().addFlags (android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);   // !! Keep Screen on !!
 
-    //gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+    //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
 
     if (m_uim_mgr == null)
       m_uim_mgr = (UiModeManager) getSystemService (UI_MODE_SERVICE);
@@ -396,7 +413,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       });
     }
     else
-      gb.xxy.hr.hu_uti.loge ("m_tv_vid == null");
+      hu_uti.loge ("m_tv_vid == null");
 
     //car_mode_start ();
 
@@ -408,7 +425,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
         m_wakelock.acquire ();                                          // Android M exception for WAKE_LOCK
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 
     //msg_display ();
@@ -425,19 +442,18 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       if (ret <= 0) {                                                   // If no USB devices...
 
 	  //Need to move car mode to option as well. Is it needed at all?
-        // if (SP.getBoolean("carm",false) && ! starting_car_mode) {  // Else if have at least 1 USB device and we are not starting yet car mode...
-         
-          // starting_car_mode = true;
-		  
-		  // m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO); 
-		  // m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
-         
-          // gb.xxy.hr.hu_uti.logd ("After  car_mode_start()");
-        // }
-        // else {
-          // gb.xxy.hr.hu_uti.logd ("Starting car mode or disabled so don't call car_mode_start()");
-          // starting_car_mode = false;
-        // }
+        if (SP.getBoolean("carm",false) && ! starting_car_mode) {  // Else if have at least 1 USB device and we are not starting yet car mode...
+          hu_uti.logd ("Before car_mode_start()");
+          starting_car_mode = true;
+		  m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
+		  m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO); 
+          car_mode_start ();
+          hu_uti.logd ("After  car_mode_start()");
+        }
+        else {
+          hu_uti.logd ("Starting car mode or disabled so don't call car_mode_start()");
+          starting_car_mode = false;
+        }
 
       }
 
@@ -446,7 +462,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
     wifi_resume (); // Does nothing now
 
-    gb.xxy.hr.hu_uti.logd ("end");
+    hu_uti.logd ("end");
 	
 	//SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
 	if (autostart != 9) {
@@ -463,7 +479,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     mLocalBroadcastManager.registerReceiver(mBroadcastReceiver, killIntentFilter);
 
 	
-	Intent toggle_running=new Intent(m_context, gb.xxy.hr.hu_wifi_service.class);
+	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
 	toggle_running.setAction("toggle_app_running_state");
 	toggle_running.putExtra("curr",1);
 	sendBroadcast(toggle_running);
@@ -479,70 +495,67 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   @Override
   public void onStart () {
     super.onStart ();
-    gb.xxy.hr.hu_uti.logd ("--- ");
+    hu_uti.logd ("--- ");
 	
   }
 
   @Override
   protected void onResume () {
     super.onResume ();
-    gb.xxy.hr.hu_uti.logd ("--- ");
+    hu_uti.logd ("--- ");
     //wifi_resume ();                                                   // Register the broadcast receiver with the intent values to be matched
   
   }
-/*
+
   @Override
   protected void onNewIntent (Intent intent) {    // am start -n gb.xxy.hr/.hu_act -a "send" -e data 040b000000130801       #AUDIO_FOCUS_STATE_GAIN
                                                   // am start -n gb.xxy.hr/.hu_act -a "send" -e data 000b0000000f0800       Byebye request
                                                   // am start -n gb.xxy.hr/.hu_act -a "send" -e data 020b0000800808021001   VideoFocus lost focusState=0 unsolicited=true
     super.onNewIntent (intent);
-    gb.xxy.hr.hu_uti.logd ("--- intent: " + intent);
+    hu_uti.logd ("--- intent: " + intent);
 
     String action = intent.getAction ();
     if (action == null) {
-      gb.xxy.hr.hu_uti.loge ("action == null");
+      hu_uti.loge ("action == null");
       return;
     }
                                                                         // --- intent: Intent { act=android.hardware.usb.action.USB_DEVICE_ATTACHED flg=0x10000000 cmp=gb.xxy.hr/.hu_act (has extras) }
     if (! action.equals ("send")) {                                     // If this is NOT our "fm.a2d.s2.send" Intent...
-      //gb.xxy.hr.hu_uti.logd ("action: " + action);                              // action: android.hardware.usb.action.USB_DEVICE_ATTACHED
+      //hu_uti.logd ("action: " + action);                              // action: android.hardware.usb.action.USB_DEVICE_ATTACHED
       return;
     }
 
     Bundle extras = intent.getExtras ();
     if (extras == null) {
-      gb.xxy.hr.hu_uti.loge ("extras == null");
+      hu_uti.loge ("extras == null");
       return;
     }
-    //gb.xxy.hr.hu_uti.logd ("extras: " + extras.describeContents ());            // Always "extras: 0"
+    //hu_uti.logd ("extras: " + extras.describeContents ());            // Always "extras: 0"
 
     String val = extras.getString ("data", "def");
     if (val == null) {
-      gb.xxy.hr.hu_uti.loge ("val == null");
+      hu_uti.loge ("val == null");
       return;
     }
     //byte [] send_buf = new byte [size];
-    byte [] send_buf = gb.xxy.hr.hu_uti.hexstr_to_ba (val);
-    String val2 = gb.xxy.hr.hu_uti.ba_to_hexstr (send_buf);
-    gb.xxy.hr.hu_uti.logd ("val: " + val + "  val2: " + val2);
+    byte [] send_buf = hu_uti.hexstr_to_ba (val);
+    String val2 = hu_uti.ba_to_hexstr (send_buf);
+    hu_uti.logd ("val: " + val + "  val2: " + val2);
 
     m_hu_tra.test_send (send_buf, send_buf.length);
 
-  }*/
+  }
 
   @Override
   protected void onPause () {
     super.onPause ();
-    gb.xxy.hr.hu_uti.logd ("--- ");
-
+    hu_uti.logd ("--- ");
   }
 
   @Override
   public void onStop () {
     super.onStop ();
-    gb.xxy.hr.hu_uti.logd ("--- ");
-			if (connection_ok && myip=="127.0.0.1")
-	startService(new Intent(this, gb.xxy.hr.hu_self_phone.class));
+    hu_uti.logd ("--- ");
   }
 
   @Override
@@ -553,7 +566,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   @Override
   public void onRestart () {                                            // Restart comes between Stop and Start or when returning to the app
     super.onRestart ();
-    gb.xxy.hr.hu_uti.logd ("--- ");
+    hu_uti.logd ("--- ");
 
     if (m_sur_tex != null && m_tv_vid != null) {
       try {
@@ -562,8 +575,8 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       catch (Throwable e) {
         Log.e ("setSurfaceTexture: ", e.getMessage ());
       }
-      gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
-      gb.xxy.hr.hu_uti.logd ("--- setSurfaceTexture done");
+      hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+      hu_uti.logd ("--- setSurfaceTexture done");
     }
   }
 
@@ -576,15 +589,15 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   @Override
   protected void onDestroy () {
     super.onDestroy ();
-    gb.xxy.hr.hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
+    hu_uti.logd ("--- m_tcp_connected: " + m_tcp_connected);
 	if (!m_tcp_connected) {
     all_stop ();
 	 
 // No need of reseting the USB
-//    if (! gb.xxy.hr.hu_uti.file_get ("/sdcard/hu_usbr_disable"))
-//      gb.xxy.hr.hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
+//    if (! hu_uti.file_get ("/sdcard/hu_usbr_disable"))
+//      hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
     try {
-	stopService(new Intent(this, gb.xxy.hr.hu_self_phone.class));
+	stopService(new Intent(this, hu_self_phone.class));
 	}
 	 catch (Throwable e) {
         Log.e ("HU-SERVICE", e.getMessage ());
@@ -602,7 +615,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 		Log.e ("HU-SERVICE", e.getMessage ()); 
 	 }
     //if (! starting_car_mode)
-	//  m_uim_mgr.disableCarMode(0);
+	  m_uim_mgr.disableCarMode(0);
   
   	Intent toggle_running=new Intent(m_context,hu_wifi_service.class);
 	toggle_running.setAction("toggle_app_running_state");
@@ -612,12 +625,12 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
    android.os.Process.killProcess (android.os.Process.myPid ());       // Kill this process completely for "super cleanup"
   }
 
-  
   }
 
     // Color:
   private int           lite_clr = Color.WHITE;
-
+  private int           dark_clr = Color.GRAY;
+  private int           blue_clr = Color.BLUE;
 
 
   private void presets_setup (int clr) {                                // 16 Max Preset Buttons hardcoded
@@ -663,7 +676,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     // Exit, Test, Self, Wifi, NFC, Day, Night, Auto, SUsb
 
     for (int idx = 0; idx < PRESET_LEN_TOT; idx ++) {               // For all presets...
-      String name = "";//gb.xxy.hr.hu_uti.prefs_get (m_context, "chass_preset_name_" + idx, "");
+      String name = "";//hu_uti.prefs_get (m_context, "chass_preset_name_" + idx, "");
       if (idx == 0)
         name = "Exit";
       else if (idx == 1)
@@ -706,10 +719,8 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   private void function_select (int idx) {
     // Exit, Test, Self, Wifi, NFC, Day, Night, Auto, SUsb, RUsb
     if (idx == 0) {                                                     // If Exit...
-     // m_uim_mgr.disableCarMode(0);
-	m_hu_tra.byebye_send();
-	hu_uti.ms_sleep(1250);
-	 m_tcp_connected=false;
+      m_uim_mgr.disableCarMode(0);
+	  m_tcp_connected=false;
 	  
 
       //android.os.Process.killProcess (android.os.Process.myPid ());// Kill this process completely for "super cleanup"
@@ -724,14 +735,14 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 		  sys_ui_show ();
 		  
 		  
-		  // int ret = gb.xxy.hr.hu_uti.sys_run("am force-stop com.google.android.projection.gearhead; am start -W -n com.google.android.projection.gearhead/.companion.SplashScreenActivity; am startservice -n com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService;",true);
+		  int ret = hu_uti.sys_run("am force-stop com.google.android.projection.gearhead; am start -W -n com.google.android.projection.gearhead/.companion.SplashScreenActivity; am startservice -n com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService;",true);
 		 
-		  // gb.xxy.hr.hu_uti.logd("ret value is: " + ret);
+		  hu_uti.logd("ret value is: " + ret);
 		  
-		  // if (ret==1 || ret==-1) {
-			  // Intent aaintent = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
-			  // startActivity(aaintent);
-			  // }
+		  if (ret==1 || ret==-1) {
+			  Intent aaintent = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+			  startActivity(aaintent);
+			  }
 		  			
 		   wifi_start (2);
 	}
@@ -765,16 +776,14 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO);*/
     else if (idx == 5)
       //m_uim_mgr.enableCarMode (0);//UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME);
-      gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+      hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
     else if (idx == 6)
-	{Toast.makeText (m_context, "Sorry this function is no longer available...)", Toast.LENGTH_LONG).show ();  
-	sys_ui_show ();}
+      m_hu_tra.usb_force ();
     else if (idx == 7)
-      {Toast.makeText (m_context, "Sorry this function is no longer available...)", Toast.LENGTH_LONG).show ();  
-	sys_ui_show ();}
+      hu_uti.sys_run ("/data/data/gb.xxy.hr/lib/libusb_reset.so /dev/bus/usb/*/* 1>/dev/null 2>/dev/null", true);
     else if (idx == 8) 
 	{
-				Intent i = new Intent(this, gb.xxy.hr.hu_pref.class);
+				Intent i = new Intent(this, hu_pref.class);
                 startActivity(i);
 	}
 	//else if (idx == 9)
@@ -791,11 +800,11 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 		 
 		
       ani (v);
-      gb.xxy.hr.hu_uti.logd ("view: " + v);
+      hu_uti.logd ("view: " + v);
 
       for (int idx = 0; idx < PRESET_LEN_TOT; idx ++) {                 // For all presets...
         if (v == m_preset_tv [idx]) {                                   // If this preset...
-          gb.xxy.hr.hu_uti.logd ("idx: " + idx);
+          hu_uti.logd ("idx: " + idx);
           function_select (idx);
           return;
         }
@@ -819,8 +828,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
 	  if (con_type==2)
 	  {
-		//startService(new Intent(this, gb.xxy.hr.hu_self_phone.class));
-		async_wifi_start=false;
+		startService(new Intent(this, hu_self_phone.class));
 	  }
       if (! async_wifi_start) {
         wifi_long_start (con_type);
@@ -832,7 +840,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
                                                                         // !! Async makes data lag a LOT !! Because different thread for setup ???
     AsyncTask at = new wifi_start_task (this);
-    gb.xxy.hr.hu_uti.logd ("at: " + at);
+    hu_uti.logd ("at: " + at);
     if (at != null)
       at.execute (con_type);//obj);
     }
@@ -846,7 +854,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     public wifi_start_task (Context context) {//, View statusText) {
       this.context = context;
       //this.statusText = (TextView) statusText;
-      gb.xxy.hr.hu_uti.logd ("context: " + context);
+      hu_uti.logd ("context: " + context);
     }
 
     @Override
@@ -854,10 +862,10 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     //protected String doInBackground (Object... obj) {//String... str) {// params) {
 	int con_type = (Integer) params[0]; 
       try {
-        gb.xxy.hr.hu_uti.logd ("params: " + params);
+        hu_uti.logd ("params: " + params);
 
         wifi_long_start (con_type);
-        gb.xxy.hr.hu_uti.logd ("wifi_long_start done");
+        hu_uti.logd ("wifi_long_start done");
 
 
         return (null);// f.getAbsolutePath();
@@ -883,7 +891,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   private void wifi_long_start (int con_type) {
 
       if (wifi_starting) {
-        gb.xxy.hr.hu_uti.loge ("wifi_starting: " + wifi_starting);
+        hu_uti.loge ("wifi_starting: " + wifi_starting);
         return;
       }
       wifi_starting = true;
@@ -891,7 +899,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
 //wifi_init ();
 
-      //gb.xxy.hr.hu_uti.sys_run ("am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity -f 32768 & ", true);
+      //hu_uti.sys_run ("am start -a android.nfc.action.NDEF_DISCOVERED -t application/com.google.android.gms.car -n com.google.android.gms/.car.FirstActivity -f 32768 & ", true);
 	int ret = -1;
 	if (con_type==2) {
 		
@@ -902,17 +910,48 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 	}
 	else {
 	 ret = m_hu_tra.jni_aap_start ("192.168.49.122");           }                   // Start JNI Android Auto Protocol and Main Thread
-      gb.xxy.hr.hu_uti.logd ("jni_aap_start() ret: " + ret);
+      hu_uti.logd ("jni_aap_start() ret: " + ret);
 
       m_tcp_connected = true;
       wifi_starting = false;
 
-      //gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+      //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
 
   }
 
 
- 
+  private void car_mode_start () {
+    // try {
+      // if (m_uim_mgr == null)
+        // m_uim_mgr = (UiModeManager) getSystemService (UI_MODE_SERVICE);
+      // if (m_uim_mgr != null) {
+        // m_uim_mgr.enableCarMode (0);         // API 21+: UiModeManager.ENABLE_CAR_MODE_ALLOW_SLEEP
+        // //m_uim_mgr.enableCarMode (UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME);
+        // //m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_YES);
+        // //m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO);
+      // }
+    // }
+    // catch (Throwable t) {
+      hu_uti.loge ("Throwable: " );
+    // }
+    //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+  }
+
+  private void car_mode_stop () {
+    // try {
+      // //m_uim_mgr = (UiModeManager) getSystemService (UI_MODE_SERVICE);
+      // if (m_uim_mgr != null) {                                          // If was used to enable...
+        // m_uim_mgr.disableCarMode (0);//UiModeManager.DISABLE_CAR_MODE_GO_HOME);//0);
+        // //m_uim_mgr.setNightMode (UiModeManager.MODE_NIGHT_AUTO);
+        // //m_uim_mgr = null;
+        // hu_uti.logd ("OK disableCarMode");
+      // }
+    // }
+    // catch (Throwable t) {
+      hu_uti.loge ("Throwable: " );
+    // }
+    // hu_uti.logd ("After disableCarMode");
+  }
 
 
   private Animation     m_ani_button= null;
@@ -933,24 +972,24 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     ui_video_started_set (true);                                        // Enable video/disable log view
 
     Thread thread_vs = new Thread (run_vs, "run_vs");
-    //gb.xxy.hr.hu_uti.logd ("thread_vs: " + thread_vs);
+    //hu_uti.logd ("thread_vs: " + thread_vs);
     if (thread_vs == null)
-      ;//gb.xxy.hr.hu_uti.loge ("thread_vs == null");
+      ;//hu_uti.loge ("thread_vs == null");
     else {
       //thread_vs_active = true;
       java.lang.Thread.State thread_state = thread_vs.getState ();
       if (thread_state == java.lang.Thread.State.NEW || thread_state == java.lang.Thread.State.TERMINATED) {
-        ////gb.xxy.hr.hu_uti.logd ("thread priority: " + thread_vs.getPriority ());   // Get 5
+        ////hu_uti.logd ("thread priority: " + thread_vs.getPriority ());   // Get 5
         thread_vs.start ();
       }
       //else
-      //  gb.xxy.hr.hu_uti.loge ("thread_vs thread_state: " + thread_state);
+      //  hu_uti.loge ("thread_vs thread_state: " + thread_state);
     }
   }
 
   private final Runnable run_vs = new Runnable () {
     public void run () {
-      //gb.xxy.hr.hu_uti.logd ("run_vs");
+      //hu_uti.logd ("run_vs");
       boolean started = true;
       video_test (started);
     }
@@ -971,19 +1010,19 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   String h264_full_filename = null;
 
   private void video_test (final boolean started) {
-    if (h264_full_filename == null && gb.xxy.hr.hu_uti.file_get ("/sdcard/Download/husam.h264"))
+    if (h264_full_filename == null && hu_uti.file_get ("/sdcard/Download/husam.h264"))
       h264_full_filename = "/sdcard/Download/husam.h264";
-    if (h264_full_filename == null && gb.xxy.hr.hu_uti.file_get ("/sdcard/Download/husam.mp4"))
+    if (h264_full_filename == null && hu_uti.file_get ("/sdcard/Download/husam.mp4"))
       h264_full_filename = "/sdcard/Download/husam.mp4";
     if (h264_full_filename == null)
-      h264_full_filename = gb.xxy.hr.hu_uti.res_file_create (m_context, R.raw.husam_h264, "husam.h264");
+      h264_full_filename = hu_uti.res_file_create (m_context, R.raw.husam_h264, "husam.h264");
     if (h264_full_filename == null)
       h264_full_filename = "/data/data/gb.xxy.hr/files/husam.h264";
 
-    byte [] ba = gb.xxy.hr.hu_uti.file_read_16m (h264_full_filename);             // Read entire file, up to 16 MB to byte array ba
+    byte [] ba = hu_uti.file_read_16m (h264_full_filename);             // Read entire file, up to 16 MB to byte array ba
     ByteBuffer bb;// = ByteBuffer.wrap (ba);
 
-    int size = (int) gb.xxy.hr.hu_uti.file_size_get (h264_full_filename);
+    int size = (int) hu_uti.file_size_get (h264_full_filename);
     int left = size;
     int idx = 0;
     int max_chunk_size = 65536 * 4;//16384;
@@ -996,10 +1035,10 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       after = h264_after_get (ba, idx);                               // Get index of next packet that starts with 0, 0, 0, 1
       if (after == -1 && left <= max_chunk_size) {
         after = size;
-        //gb.xxy.hr.hu_uti.logd ("Last chunk  chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
+        //hu_uti.logd ("Last chunk  chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
       }
       else if (after <= 0 || after > size) {
-        gb.xxy.hr.hu_uti.loge ("Error chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
+        hu_uti.loge ("Error chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
         return;
       }
 
@@ -1010,7 +1049,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       for (ctr = 0; ctr < chunk_size; ctr ++)
         bc [ctr] = ba [idx + ctr];                                      // Copy chunk_size bytes from byte array ba at idx to byte array bc
 
-      //gb.xxy.hr.hu_uti.logd ("chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
+      //hu_uti.logd ("chunk_size: " + chunk_size + "  idx: " + idx + "  after: " + after + "  size: " + size + "  left: " + left);
 
       idx += chunk_size;
       left -= chunk_size;
@@ -1043,7 +1082,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
         }
 		
 		*/
-     // gb.xxy.hr.hu_uti.ms_sleep (20);                                             // Wait a frame
+      hu_uti.ms_sleep (20);                                             // Wait a frame
     }
 
   }
@@ -1055,11 +1094,11 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     if (video_started == started)                                       // If no change...
       return;
 
-    gb.xxy.hr.hu_uti.logd ("video_started: " + video_started + "started: " + started);
+    hu_uti.logd ("video_started: " + video_started + "started: " + started);
 //*
     try {
       if (started) {                                                    // If starting video...
-        gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+        hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
         m_fl_tv_vid.setVisibility   (View.VISIBLE);                     // Enable  video
         m_ll_tv_log.setVisibility   (View.GONE);                        // Disable log
 
@@ -1078,10 +1117,10 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       }
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 //*/
-    //gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+    //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
 
     video_started = started;
   }
@@ -1094,7 +1133,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     if (video_started == started)                                       // If no change...
       return;
 
-    gb.xxy.hr.hu_uti.logd ("disable_video_started_set: " + disable_video_started_set);
+    hu_uti.logd ("disable_video_started_set: " + disable_video_started_set);
 
     if (disable_video_started_set)
       return;
@@ -1113,9 +1152,9 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     }
     runOnUiThread (new vs_task (started));
 
-//    gb.xxy.hr.hu_uti.ms_sleep (100);  // Wait for it ?
+//    hu_uti.ms_sleep (100);  // Wait for it ?
 
-    //gb.xxy.hr.hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
+    //hu_uti.logd ("sys_ui_hide (): " + sys_ui_hide ());
 
   }
 
@@ -1129,7 +1168,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     if (m_dl_drawer != null)
       m_dl_drawer.closeDrawer (Gravity.START);
     else
-      gb.xxy.hr.hu_uti.loge ("m_dl_drawer == null");
+      hu_uti.loge ("m_dl_drawer == null");
 
     // Set the IMMERSIVE flag. Set the content to appear under the system bars so that the content doesn't resize when the system bars hide and show.
     m_ll_main = findViewById (R.id.ll_main);
@@ -1142,7 +1181,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
         | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
         | View.SYSTEM_UI_FLAG_IMMERSIVE);//_STICKY);
     else {
-      gb.xxy.hr.hu_uti.loge ("m_ll_main == null");
+      hu_uti.loge ("m_ll_main == null");
       return (false);
     }
     return (true);
@@ -1162,18 +1201,18 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     if (! starting_car_mode) {
       sys_ui_show ();
 
-    
+      car_mode_stop ();
     }
 
     wifi_pause ();
 
-
+    audio_record_stop ();
 
     out_audio_stop (hu_tra.AA_CH_AUD);                                         // In case Byebye terminates without proper audio stop
     out_audio_stop (hu_tra.AA_CH_AU1);
     out_audio_stop (hu_tra.AA_CH_AU2);
 
-
+    video_record_stop ();
 
     //video_started_set (false);
 
@@ -1188,7 +1227,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
         m_wakelock.release ();
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 
   }
@@ -1203,30 +1242,30 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     double vid_wid  = 0;
     vid_wid = m_tv_vid.getWidth ();
 
-    /*gb.xxy.hr.hu_uti.logd ("vid_wid: "  + vid_wid);
+    /*hu_uti.logd ("vid_wid: "  + vid_wid);
     vid_wid = m_tv_vid.getMeasuredWidth ();                             // Same value
-    gb.xxy.hr.hu_uti.logd ("vid_wid: "  + vid_wid);*/
+    hu_uti.logd ("vid_wid: "  + vid_wid);*/
     return (vid_wid);
   }
   private double vid_hei_get () {                                       // Called only by touch_send()
     double vid_hei  = 0;
     vid_hei = m_tv_vid.getHeight ();
 
-    /*gb.xxy.hr.hu_uti.logd ("vid_hei: "  + vid_hei);
+    /*hu_uti.logd ("vid_hei: "  + vid_hei);
     vid_hei = m_tv_vid.getMeasuredHeight ();                            // Same value
-    gb.xxy.hr.hu_uti.logd ("vid_hei: "  + vid_hei);*/
+    hu_uti.logd ("vid_hei: "  + vid_hei);*/
     return (vid_hei);
   }
 
 
   private void touch_send (MotionEvent event) {
-    //gb.xxy.hr.hu_uti.logd ("event: " + event);
+    //hu_uti.logd ("event: " + event);
 
     int x = (int) (event.getX (0) / (vid_wid_get () / m_virt_vid_wid));
     int y = (int) (event.getY (0) / (vid_hei_get () / m_virt_vid_hei));
 
     if (x < 0 || y < 0 || x >= 65535 || y >= 65535) {   // Infinity if vid_wid_get() or vid_hei_get() return 0
-      gb.xxy.hr.hu_uti.loge ("Invalid x: " + x + "  y: " + y);
+      hu_uti.loge ("Invalid x: " + x + "  y: " + y);
       return;
     }
 
@@ -1234,23 +1273,23 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     int me_action = event.getActionMasked ();
     switch (me_action) {
       case MotionEvent.ACTION_DOWN:
-        gb.xxy.hr.hu_uti.logd ("event: " + event + " (ACTION_DOWN)    x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_DOWN)    x: " + x + "  y: " + y);
         aa_action = 0;
         break;
       case MotionEvent.ACTION_MOVE:
-        gb.xxy.hr.hu_uti.logd ("event: " + event + " (ACTION_MOVE)    x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_MOVE)    x: " + x + "  y: " + y);
         aa_action = 2;
         break;
       case MotionEvent.ACTION_CANCEL:
-        gb.xxy.hr.hu_uti.logd ("event: " + event + " (ACTION_CANCEL)  x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_CANCEL)  x: " + x + "  y: " + y);
         aa_action = 1;
         break;
       case MotionEvent.ACTION_UP:
-        gb.xxy.hr.hu_uti.logd ("event: " + event + " (ACTION_UP)      x: " + x + "  y: " + y);
+        hu_uti.logd ("event: " + event + " (ACTION_UP)      x: " + x + "  y: " + y);
         aa_action = 1;
         break;
       default:
-        gb.xxy.hr.hu_uti.loge ("event: " + event + " (Unknown: " + me_action + ")  x: " + x + "  y: " + y);
+        hu_uti.loge ("event: " + event + " (Unknown: " + me_action + ")  x: " + x + "  y: " + y);
         return;
     }
     if (m_hu_tra != null) {
@@ -1267,7 +1306,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
   @Override                                                             // Called after onCreate(), which calls "m_tv_vid.setSurfaceTextureListener (hu_act.this);"
   public void onSurfaceTextureAvailable (SurfaceTexture sur_tex, int width, int height) {
-    gb.xxy.hr.hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);  // N9: width: 2048  height: 1253
+    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);  // N9: width: 2048  height: 1253
 
     //if (m_sur_tex != null)    //onRestart
     //  return;
@@ -1276,7 +1315,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     m_sur_tex = sur_tex;
 
     if (height > 1080) {                                              // Limit surface height to 1080 or N7 2013 won't work: width: 1920  height: 1104    Screen 1200x1920, nav = 96 pixels
-      gb.xxy.hr.hu_uti.loge ("height: " + height);
+      hu_uti.loge ("height: " + height);
       height = 1080;
     }
 	
@@ -1302,7 +1341,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 		}
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable creating video/avc decoder: " + t);
+      hu_uti.loge ("Throwable creating video/avc decoder: " + t);
     }
     try {
       m_codec_buf_info = new BufferInfo ();                         // Create Buffer Info
@@ -1311,16 +1350,16 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       m_codec.start ();                                             // Start codec
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
 	if (autostart>0 && autostart !=9)
 	{	if (autostart==2)
 		{myip="127.0.0.1";
-		int ret = gb.xxy.hr.hu_uti.sys_run("am force-stop com.google.android.projection.gearhead; am start -W -n com.google.android.projection.gearhead/.companion.SplashScreenActivity; am startservice -n com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService;",true);
-		  // if (ret==1) {
-			  // Intent aaintent = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
-			  // startActivity(aaintent);
-			  // }
+		int ret = hu_uti.sys_run("am force-stop com.google.android.projection.gearhead; am start -W -n com.google.android.projection.gearhead/.companion.SplashScreenActivity; am startservice -n com.google.android.projection.gearhead/.companion.DeveloperHeadUnitNetworkService;",true);
+		  if (ret==1) {
+			  Intent aaintent = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+			  startActivity(aaintent);
+			  }
 		}
 		wifi_start(autostart);
 	}
@@ -1334,18 +1373,18 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 
   @Override
   public void onSurfaceTextureSizeChanged (SurfaceTexture sur_tex, int width, int height) {        // ignore
-    gb.xxy.hr.hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);
+    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex + "  width: " + width + "  height: " + height);
   }
 
   @Override
   public boolean onSurfaceTextureDestroyed (SurfaceTexture sur_tex) {
-    gb.xxy.hr.hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
+    hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
     return (m_sur_tex==null);                                                     // Prevent destruction of SurfaceTexture
   }
 
   @Override
   public void onSurfaceTextureUpdated (SurfaceTexture sur_tex) {             // Called many times per second when video changes, so ignore
-    //gb.xxy.hr.hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
+    //hu_uti.logd ("--- sur_tex: " + sur_tex + "  m_sur_tex: " + m_sur_tex);
   }
 
 
@@ -1358,13 +1397,13 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   }
 
   private boolean codec_input_provide (ByteBuffer content) {            // Called only by media_decode() with new NAL unit in Byte Buffer
-    if (gb.xxy.hr.hu_uti.ena_log_verbo)
-      gb.xxy.hr.hu_uti.logv ("content: " + content);    //gb.xxy.hr.hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
-//gb.xxy.hr.hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
+    if (hu_uti.ena_log_verbo)
+      hu_uti.logv ("content: " + content);    //hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
+//hu_uti.logd ("content.position (): " + content.position () + "  content.limit (): " + content.limit ());
     try {
       final int index = m_codec.dequeueInputBuffer (1000000);           // Get input buffer with 1 second timeout
       if (index < 0) {
-		  //gb.xxy.hr.hu_uti.logd("index was less than 0 returning error");
+		  //hu_uti.logd("index was less than 0 returning error");
 		  if (h264_wait>0)
 		  {
 		   m_codec.flush();    
@@ -1374,21 +1413,21 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
 		return (false);                                                 // Done with "No buffer" error
 		  }
       }
-	  	 // gb.xxy.hr.hu_uti.logd("step 2");
+	  	 // hu_uti.logd("step 2");
       if (m_codec_input_bufs == null) {
         m_codec_input_bufs = m_codec.getInputBuffers ();                // Set m_codec_input_bufs if needed
       }
-		//gb.xxy.hr.hu_uti.logd("step 3");
+		//hu_uti.logd("step 3");
       final ByteBuffer buffer = m_codec_input_bufs [index];
       final int capacity = buffer.capacity ();
       buffer.clear ();
-	  // gb.xxy.hr.hu_uti.logd("step 3");
+	  // hu_uti.logd("step 3");
       if (content.remaining () <= capacity) {                           // If we can just put() the content...
         buffer.put (content);                                           // Put the content
-		 //gb.xxy.hr.hu_uti.logd("step 4");
+		 //hu_uti.logd("step 4");
       }
       else {                                                            // Else... (Should not happen ?)
-        gb.xxy.hr.hu_uti.loge ("content.hasRemaining (): " + content.hasRemaining () + "  capacity: " + capacity);
+        hu_uti.loge ("content.hasRemaining (): " + content.hasRemaining () + "  capacity: " + capacity);
 
         int limit = content.limit ();
         content.limit (content.position () + capacity);                 // Temporarily set constrained limit
@@ -1396,68 +1435,173 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
         content.limit (limit);                                          // Restore original limit
       }
       buffer.flip ();                                                   // Flip buffer for reading
-     // gb.xxy.hr.hu_uti.logd ("steo 5 buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
+     // hu_uti.logd ("steo 5 buffer.position (): " + buffer.position () + "  buffer.limit (): " + buffer.limit ());
 
       m_codec.queueInputBuffer (index, 0, buffer.limit (), 0, 0);       // Queue input buffer for decoding w/ offset=0, size=limit, no microsecond timestamp and no flags (not end of stream)
       return (true);                                                    // Processed
     }
     catch (Throwable t) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + t);
+      hu_uti.loge ("Throwable: " + t);
     }
     return (false);                                                     // Error: exception
   }
 
   private void codec_output_consume () {                                // Called only by media_decode() after codec_input_provide()
-    //gb.xxy.hr.hu_uti.logd ("");
+    //hu_uti.logd ("");
     int index = -777;
     for (;;) {                                                          // Until no more buffers...
       index = m_codec.dequeueOutputBuffer (m_codec_buf_info, h264_wait);        // Dequeue an output buffer but do not wait
       if (index >= 0)
         m_codec.releaseOutputBuffer (index, true /*render*/);           // Return the buffer to the codec
       else if (index == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)         // See this 1st shortly after start. API >= 21: Ignore as getOutputBuffers() deprecated
-	  { gb.xxy.hr.hu_uti.logd ("INFO_OUTPUT_BUFFERS_CHANGED: "+myip);
+	  { hu_uti.logd ("INFO_OUTPUT_BUFFERS_CHANGED: "+myip);
 	   if (myip=="127.0.0.1")
-		//m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
-		//startActivity(saved_intent);
-		startService(new Intent(this, gb.xxy.hr.hu_self_phone.class));
-
-		
-		connection_ok=true;
-		//If we use calculated sunset/sunrise method we should set up the location listenere
-		if(night_mode == 0)
-   			  mSensorManager.registerListener(LightSensorListener, mLight, SensorManager.SENSOR_DELAY_NORMAL);
-		else if (night_mode == 1)
-		{		 
-		LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-		if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-		Location LastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (LastLocation != null) 
-            Calculate_Sunset_Sunrise(LastLocation.getLatitude(),LastLocation.getLongitude());
-		}
-		}
-			 // Only register Location listener if sunset/sunrise is calculated or autovolume is enabled.
-		
-		else if (night_mode == 2)
-			m_hu_tra.night_toggle(0);
-		else if (night_mode == 3)
-			m_hu_tra.night_toggle(3);
-  	    }
+			m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
+	  	  }
       else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)          // See this 2nd shortly after start. Output format changed for subsequent data. See getOutputFormat()
-		gb.xxy.hr.hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
+		hu_uti.logd ("INFO_OUTPUT_FORMAT_CHANGED");
       else if (index == MediaCodec.INFO_TRY_AGAIN_LATER)
         break;
       else
         break;
     }
     if (index != MediaCodec.INFO_TRY_AGAIN_LATER)
-      gb.xxy.hr.hu_uti.loge ("index: " + index);
+      hu_uti.loge ("index: " + index);
   }
 
 
+    // Video recording:
+//*
+  private boolean video_recording = false;
+  private FileOutputStream video_record_fos = null;
 
+  private void video_record_stop () {
+    try {
+      if (video_record_fos != null)
+        video_record_fos.close ();                                                     // Close output file
+      }
+      catch (Throwable t) {
+        hu_uti.loge ("Throwable: " + t);
+        //return;
+      }
+    video_record_fos = null;
+    video_recording = false;
+  }
 
+  private void video_record_write (ByteBuffer content) {    // ffmpeg -i 2015-04-29-00_38_16.mp4 -vcodec copy -an -bsf:v h264_mp4toannexb  aa.h264
+    if (! video_recording) {
+      try {
+        video_record_fos = this.openFileOutput ("/sdcard/hurec.h264", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
+      }
+      catch (Throwable t) {
+        //hu_uti.loge ("Throwable: " + t);
+        hu_uti.loge ("Throwable: " + t);
+        //return;
+      }
+      try {
+        if (video_record_fos == null)
+          video_record_fos = this.openFileOutput ("hurec.h264", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
+      }
+      catch (Throwable t) {
+        //hu_uti.loge ("Throwable: " + t);
+        hu_uti.loge ("Throwable: " + t);
+        return;
+      }
 
+      video_recording = true;
+    }
 
+    int pos = content.position ();
+    int siz = content.remaining ();
+    int last = pos + siz - 1;
+    byte [] ba = content.array ();
+    if (ba == null) {
+      hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + hu_uti.hex_get (siz) + ")  last: " + last);
+      return;
+    }
+    byte b1 = ba [pos + 3];
+    byte bl = ba [last];
+    if (hu_uti.ena_log_verbo)
+      hu_uti.logv ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
+    
+    try {
+      video_record_fos.write (ba, pos, siz);                                               // Copy input to output file
+    }
+    catch (Throwable t) {
+      hu_uti.loge ("Throwable: " + t);
+      return;
+    }
+  }
+//*/
+
+    // Audio recording:
+//*
+  private boolean audio_recording = false;
+  private FileOutputStream audio_record_fos = null;
+
+  private void audio_record_stop () {
+    try {
+      if (audio_record_fos != null)
+        audio_record_fos.close ();                                                     // Close output file
+      }
+      catch (Throwable t) {
+        hu_uti.loge ("Throwable: " + t);
+        //return;
+      }
+    audio_record_fos = null;
+    audio_recording = false;
+  }
+
+  private void audio_record_write (ByteBuffer content) {    // ffmpeg -i 2015-04-29-00_38_16.mp4 -vcodec copy -an -bsf:v h264_mp4toannexb  aa.h264
+    if (! audio_recording) {
+//*  Throwable: java.lang.IllegalArgumentException: File /sdcard/hurec.pcm contains a path separator
+      try {
+        audio_record_fos = this.openFileOutput ("/sdcard/hurec.pcm", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
+        hu_uti.logw ("audio_record_fos: " + audio_record_fos);
+      }
+      catch (Throwable t) {
+        hu_uti.logw ("Throwable: " + t);
+        //return;
+      }
+//*/
+      try {
+        if (audio_record_fos == null)     // -> /data/data/gb.xxy.hr/files/hurec.pcm
+          audio_record_fos = this.openFileOutput ("hurec.pcm", Context.MODE_WORLD_READABLE);//, Context.MODE_PRIVATE); // | MODE_WORLD_WRITEABLE      // NullPointerException here unless permissions 755
+        hu_uti.logw ("audio_record_fos: " + audio_record_fos);
+      }
+      catch (Throwable t) {
+        //hu_uti.loge ("Throwable: " + t);
+        hu_uti.loge ("Throwable: " + t);
+        return;
+      }
+
+      audio_recording = true;
+    }
+
+    int pos = content.position ();
+    int siz = content.remaining ();
+    int last = pos + siz - 1;
+    byte [] ba = content.array ();
+    if (ba == null) {
+      hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + hu_uti.hex_get (siz) + ")  last: " + last);
+      return;
+    }
+    byte b1 = ba [pos + 3];
+    byte bl = ba [last];
+    if (hu_uti.ena_log_verbo)
+      hu_uti.logv ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
+
+hu_uti.loge ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
+    
+    try {
+      audio_record_fos.write (ba, pos, siz);                            // Copy input to output file
+    }
+    catch (Throwable t) {
+      hu_uti.loge ("Throwable: " + t);
+      return;
+    }
+  }
+//*/
 
   // Audio:
 
@@ -1504,7 +1648,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   private Thread        thread_mic_audio        = null;
 
   public void mic_audio_stop () {
-    gb.xxy.hr.hu_uti.logd ("thread_mic_audio: " + thread_mic_audio + "  thread_mic_audio_active: " + thread_mic_audio_active);
+    hu_uti.logd ("thread_mic_audio: " + thread_mic_audio + "  thread_mic_audio_active: " + thread_mic_audio_active);
     mic_audio_len = 0;
     if (thread_mic_audio_active) {
       thread_mic_audio_active = false;
@@ -1527,31 +1671,31 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     try {
       m_mic_audiorecord = new AudioRecord (m_mic_src, m_mic_samplerate, chan_in_get (m_mic_channels), AudioFormat.ENCODING_PCM_16BIT, m_mic_totbufsize);
       int rec_state = m_mic_audiorecord.getState ();
-      gb.xxy.hr.hu_uti.logd ("rec_state: " + rec_state);
+      hu_uti.logd ("rec_state: " + rec_state);
       if (rec_state == AudioRecord.STATE_INITIALIZED) {                 // If Init OK...
-        gb.xxy.hr.hu_uti.logd ("Success with m_mic_src: " + m_mic_src);
+        hu_uti.logd ("Success with m_mic_src: " + m_mic_src);
         m_mic_audiorecord.startRecording ();                            // Start input
 
           thread_mic_audio = new Thread (run_mic_audio, "mic_audio");
-          gb.xxy.hr.hu_uti.logd ("thread_mic_audio: " + thread_mic_audio);
+          hu_uti.logd ("thread_mic_audio: " + thread_mic_audio);
           if (thread_mic_audio == null)
-            gb.xxy.hr.hu_uti.loge ("thread_mic_audio == null");
+            hu_uti.loge ("thread_mic_audio == null");
           else {
             thread_mic_audio_active = true;
             java.lang.Thread.State thread_state = thread_mic_audio.getState ();
             if (thread_state == java.lang.Thread.State.NEW || thread_state == java.lang.Thread.State.TERMINATED) {
-              //gb.xxy.hr.hu_uti.logd ("thread priority: " + thread_mic_audio.getPriority ());   // Get 5
+              //hu_uti.logd ("thread priority: " + thread_mic_audio.getPriority ());   // Get 5
               thread_mic_audio.start ();
             }
             else
-              gb.xxy.hr.hu_uti.loge ("thread_mic_audio thread_state: " + thread_state);
+              hu_uti.loge ("thread_mic_audio thread_state: " + thread_state);
           }
 
         return (0);
       }
     }
     catch (Exception e) {
-      gb.xxy.hr.hu_uti.loge ("Exception: " + e );  // "java.lang.IllegalArgumentException: Invalid audio source."
+      hu_uti.loge ("Exception: " + e );  // "java.lang.IllegalArgumentException: Invalid audio source."
       m_mic_audiorecord = null;
       return (-2);
     }
@@ -1562,7 +1706,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
   private int mic_audio_len = 0;
   private final Runnable run_mic_audio = new Runnable () {
     public void run () {
-      gb.xxy.hr.hu_uti.logd ("run_mic_audio");
+      hu_uti.logd ("run_mic_audio");
       //native_priority_set (pcm_priority);
 /*                                                                      // Setup temp vars before loop to minimize garbage collection   (!! but aud_mod() has this issue)
       int bufs = 0;
@@ -1576,7 +1720,7 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       while (thread_mic_audio_active) {                                 // While Thread should be active...
 
         while (mic_audio_len > 0)                                       // While single buffer is in use...
-          gb.xxy.hr.hu_uti.ms_sleep (3);
+          hu_uti.ms_sleep (3);
 
         mic_audio_len = phys_mic_audio_read (mic_audio_buf, m_mic_bufsize);
       }
@@ -1610,10 +1754,10 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
     len = m_mic_audiorecord.read (aud_buf, 0, max_len);//m_mic_bufsize);
     if (len <= 0) {                                               // If no audio data...
       if (len == android.media.AudioRecord.ERROR_INVALID_OPERATION )   // -3
-        gb.xxy.hr.hu_uti.logd ("get expected interruption error due to shutdown: " + len);
+        hu_uti.logd ("get expected interruption error due to shutdown: " + len);
       // -2: ERROR_BAD_VALUE 
       else
-        gb.xxy.hr.hu_uti.loge ("get error: " + len);
+        hu_uti.loge ("get error: " + len);
       return (len);
     }
     return (len);
@@ -1640,25 +1784,25 @@ public class hu_act extends Activity  implements TextureView.SurfaceTextureListe
       out_audiotrack = m_out_audiotrack2;
     }
     else {
-      gb.xxy.hr.hu_uti.loge ("!!!!");
+      hu_uti.loge ("!!!!");
       return;
     }
     if (out_audiotrack == null) {
-      gb.xxy.hr.hu_uti.logd ("out_audiotrack == null");
+      hu_uti.logd ("out_audiotrack == null");
       return;
     }
 
-    long ms_tmo = gb.xxy.hr.hu_uti.tmr_ms_get () + 2000;                        // Wait for maximum of 2 seconds
+    long ms_tmo = hu_uti.tmr_ms_get () + 2000;                        // Wait for maximum of 2 seconds
     int last_frames = 0;
     int curr_frames = 1;
 
 out_audiotrack.flush ();
                                                                       // While audio still running and 2 second wait timeout has not yet elapsed...
-    while (last_frames != curr_frames && gb.xxy.hr.hu_uti.tmr_ms_get () < ms_tmo) {
-      gb.xxy.hr.hu_uti.ms_sleep (150);//300);//100);                                          // 100 ms = time for about 3 KBytes (1.5 buffers of 2Bytes (1024 samples) as used for 16,000 samples per second
+    while (last_frames != curr_frames && hu_uti.tmr_ms_get () < ms_tmo) {
+      hu_uti.ms_sleep (150);//300);//100);                                          // 100 ms = time for about 3 KBytes (1.5 buffers of 2Bytes (1024 samples) as used for 16,000 samples per second
       last_frames = curr_frames;
       curr_frames = out_audiotrack.getPlaybackHeadPosition ();
-      gb.xxy.hr.hu_uti.logd ("curr_frames: " + curr_frames + "  last_frames: " + last_frames);
+      hu_uti.logd ("curr_frames: " + curr_frames + "  last_frames: " + last_frames);
     }
 
     if (enable_audio_recycle) {
@@ -1678,7 +1822,7 @@ out_audiotrack.flush ();
   private boolean enable_audio_recycle = false;//true;
   private AudioTrack out_audio_start (int chan) {
     AudioTrack out_audiotrack = null;
-    //gb.xxy.hr.hu_uti.logd (".... m_out_audiotrack0: " + m_out_audiotrack0);
+    //hu_uti.logd (".... m_out_audiotrack0: " + m_out_audiotrack0);
 
     if (enable_audio_recycle) {
       if (chan == hu_tra.AA_CH_AUD && m_out_audiotrack0 != null)
@@ -1699,12 +1843,12 @@ out_audiotrack.flush ();
         return (out_audiotrack);
 
       if (out_audiotrack == null)
-        gb.xxy.hr.hu_uti.loge ("out_audiotrack == null");
+        hu_uti.loge ("out_audiotrack == null");
       else
         out_audiotrack.play ();                                         // Start output
     }
     catch (Throwable e) {
-      gb.xxy.hr.hu_uti.loge ("Throwable: " + e);
+      hu_uti.loge ("Throwable: " + e);
       e.printStackTrace ();
     }
     return (out_audiotrack);
@@ -1721,7 +1865,7 @@ out_audiotrack.flush ();
       out_audiotrack = m_out_audiotrack2;
     }
     else {
-      gb.xxy.hr.hu_uti.loge ("!!!!");
+      hu_uti.loge ("!!!!");
       return;
     }
 
@@ -1738,13 +1882,13 @@ out_audiotrack.flush ();
     if (new_len > 0)
       len_written += new_len;                                           // If we wrote ANY bytes, update total length written
     else
-      gb.xxy.hr.hu_uti.loge ("Error Audiotrack write: " + new_len);
+      hu_uti.loge ("Error Audiotrack write: " + new_len);
 */
     int written = out_audiotrack.write (aud_buf, 0, len);
     if (written == len)
-      gb.xxy.hr.hu_uti.logv ("OK Audiotrack written: " + written);
+      hu_uti.logv ("OK Audiotrack written: " + written);
     else
-      gb.xxy.hr.hu_uti.loge ("Error Audiotrack written: " + written + "  len: " + len);
+      hu_uti.loge ("Error Audiotrack written: " + written + "  len: " + len);
   }
 
 
@@ -1752,37 +1896,40 @@ out_audiotrack.flush ();
 
     video_started_set (true);                                           // Start video if needed
 
-    if (gb.xxy.hr.hu_uti.ena_log_verbo)
-      gb.xxy.hr.hu_uti.logv ("content: " + content);
+    if (hu_uti.ena_log_verbo)
+      hu_uti.logv ("content: " + content);
     //else
-    //  gb.xxy.hr.hu_uti.logd ("content: " + content);
+    //  hu_uti.logd ("content: " + content);
 
     if (content == null) {                                              // If no content
-      gb.xxy.hr.hu_uti.loge ("!!!");
+      hu_uti.loge ("!!!");
       return;
     }
 
     int pos = content.position ();
     if (pos != 0)                                                       // For content byte array we assume position = 0 so test and log error if position not 0
-      gb.xxy.hr.hu_uti.loge ("pos != 0  change hardcode 0, 1, 2, 3");
+      hu_uti.loge ("pos != 0  change hardcode 0, 1, 2, 3");
 
     int siz = content.remaining ();
     int last = pos + siz - 1;
     byte [] ba = content.array ();                                      // Create content byte array
     if (ba == null) {
-      gb.xxy.hr.hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + gb.xxy.hr.hu_uti.hex_get (siz) + ")  last: " + last);
+      hu_uti.loge ("ba == null...   pos: " + pos + "  siz: " + siz + " (" + hu_uti.hex_get (siz) + ")  last: " + last);
       return;
     }
     //byte b1 = ba [pos + 3];
     //byte bl = ba [last];
-    //gb.xxy.hr.hu_uti.logd ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + gb.xxy.hr.hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + gb.xxy.hr.hu_uti.hex_get (bl) + ")");
+    //hu_uti.logd ("pos: " + pos + "  siz: " + siz + "  last: " + last + " (" + hu_uti.hex_get (b1) + ")  b1: " + b1 + "  bl: " + bl + " (" + hu_uti.hex_get (bl) + ")");
 
     if (ba [0] == 0 && ba [1] == 0 && ba [2] == 0 && ba [3] == 1) {
-      gb.xxy.hr.hu_uti.logv ("H264 video");
+      hu_uti.logv ("H264 video");
     }
     else {
-      gb.xxy.hr.hu_uti.logv ("Audio");
-
+      hu_uti.logv ("Audio");
+      if (hu_uti.quiet_file_get ("/sdcard/hureca"))                     // If audio record flag file exists...
+        audio_record_write (content);
+      else if (audio_recording)                                         // Else if was recording... (file must have been removed)
+        audio_record_stop ();
 
       if (siz <= 2048 + 96)
         out_audio_write (hu_tra.AA_CH_AU1, ba, pos + siz);                     // Position always 0 so just use siz as len ?
@@ -1791,7 +1938,10 @@ out_audiotrack.flush ();
       return;      
     }
 
-
+    if (hu_uti.quiet_file_get ("/sdcard/hurecv"))                       // If video record flag file exists...
+      video_record_write (content);
+    else if (video_recording)                                           // Else if was recording... (file must have been removed)
+      video_record_stop ();
 
 
 
@@ -1803,11 +1953,11 @@ out_audiotrack.flush ();
       while (content.hasRemaining ()) {                                 // While there is remaining content...
 
         if (! codec_input_provide (content)) {                          // Process buffer; if no available buffers...
-          gb.xxy.hr.hu_uti.loge ("Dropping content because there are no available buffers.");
+          hu_uti.loge ("Dropping content because there are no available buffers.");
           return;
         }
         if (content.hasRemaining ())                                    // Never happens now
-          gb.xxy.hr.hu_uti.loge ("content.hasRemaining ()");
+          hu_uti.loge ("content.hasRemaining ()");
 
         codec_output_consume ();                                        // Send result to video codec
       }
@@ -1822,7 +1972,7 @@ out_audiotrack.flush ();
  
   public void onWindowFocusChanged(boolean hasFocus) {
     super.onWindowFocusChanged(hasFocus);
-	gb.xxy.hr.hu_uti.logd("Focus changed!");
+	hu_uti.logd("Focus changed!");
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
         if (hasFocus) {
 	     sys_ui_hide();
@@ -1830,125 +1980,6 @@ out_audiotrack.flush ();
 		}
 	}
   }
-  
-public void Calculate_Sunset_Sunrise(double latitude, double longitude) {
-double zenith = 90.833333333;
-double D2R = Math.PI / 180;
-double R2D = 180 / Math.PI;
-int day;
-double sunset;
-double sunrise;
-double t1;
-double t2;
-double M1;
-double M2;
-double L1;
-double L2;
-double UT1;
-double UT2;
-double RA1;
-double RA2;
-
-double cosH1;
-double cosH2;
-
-
-Calendar rightNow = Calendar.getInstance();
-day=rightNow.get(Calendar.DAY_OF_YEAR);
-
-
- t1 = day + ((6 - (longitude / 15)) / 24);
- t2 = day + ((18 - (longitude / 15)) / 24);
- 
-M1 = (0.9856 * t1) - 3.289;
-M2 = (0.9856 * t2) - 3.289;
-
-L1 = M1 + (1.916 * Math.sin(M1 * D2R)) + (0.020 * Math.sin(2 * M1 * D2R)) + 282.634;
-L2 = M2 + (1.916 * Math.sin(M2 * D2R)) + (0.020 * Math.sin(2 * M2 * D2R)) + 282.634;
-
-if (L1>360)
-	L1=L1-360;
-else if (L1<0)
-	L1=L1+360;
-
-if (L2>360)
-	L2=L2-360;
-else if (L2<0)
-	L2=L2+360;
-
-  RA1 = R2D * Math.atan(0.91764 * Math.tan(L1 * D2R));
-  RA2 = R2D * Math.atan(0.91764 * Math.tan(L2 * D2R));
-if (RA1>360)
-	RA1=RA1-360;
-else if (RA1<0)
-	RA1=RA1+360;
-
-if (RA2>360)
-	RA2=RA2-360;
-else if (RA2<0)
-	RA2=RA2+360;
-
-
- 
- RA1 = (RA1 + ((Math.floor(L1 / (90))) * 90 - (Math.floor(RA1 / 90)) * 90)) / 15;
- RA2 = (RA2 + ((Math.floor(L2 / (90))) * 90 - (Math.floor(RA2 / 90)) * 90)) / 15 ;
-
-	
- cosH1 = (Math.cos(zenith * D2R) - (0.39782 * Math.sin(L1 * D2R) * Math.sin(latitude * D2R))) / (Math.cos(Math.asin(0.39782 * Math.sin(L1 * D2R))) * Math.cos(latitude * D2R));
- cosH2 = (Math.cos(zenith * D2R) - (0.39782 * Math.sin(L2 * D2R) * Math.sin(latitude * D2R))) / (Math.cos(Math.asin(0.39782 * Math.sin(L2 * D2R))) * Math.cos(latitude * D2R));
- 
- sunrise=(360 - R2D * Math.acos(cosH1))/15;
- sunset=R2D * Math.acos(cosH2)/15;
- 
-  sunrise = sunrise + RA1 - (0.06571 * t1) - 6.622;
-  sunset = sunset + RA2 - (0.06571 * t2) - 6.622;
-  
-  UT1 = sunrise - (longitude / 15);
-  UT2 = sunset - (longitude / 15);
-    if (UT1 > 24) {
-        UT1 = UT1 - 24;
-    } else if (UT1 < 0) {
-        UT1 = UT1 + 24;
-    }
-
-	    if (UT2 > 24) {
-        UT2 = UT2 - 24;
-    } else if (UT2 < 0) {
-        UT2 = UT2 + 24;
-    }
-	
-	
-int offsetFromUtc=rightNow.get(Calendar.ZONE_OFFSET)/1000;
-
-UT1=UT1*3600+offsetFromUtc;
-UT2=UT2*3600+offsetFromUtc;
-
-int now_sec=(rightNow.get(Calendar.HOUR_OF_DAY)*3600+rightNow.get(Calendar.MINUTE)*60+rightNow.get(Calendar.SECOND));
-
-//Log.d("SUNSET","Sunrise: "+UT1+" and sunset: "+UT2+" Offset in sec: "+offsetFromUtc+ "Time now in sec: " + now_sec + "connection_ok: " + connection_ok + "last state:" + last_state);
-//Log.d("SUNSET","comp: " + (now_sec>UT2 || now_sec<UT1) +" overal evaluation: "+ (connection_ok && last_state!=1 && (now_sec>UT2 || now_sec<UT1)) + "day ev:" + (now_sec>UT1 || now_sec<UT2));
-//Toast.makeText (m_context, "Recalculating sunset/sunrise:...", Toast.LENGTH_LONG).show ();  
-if (connection_ok) 
-	
-			  {
-				   if (now_sec>UT1 && now_sec<UT2)
-				   {if (last_state!=0) {
-									//		Log.d("SUNSET","Setting night to 0");
-											m_hu_tra.night_toggle(0);
-											last_state=0;
-											}
-				   }	
-				   else 
-					{if (last_state!=1) {
-									//		Log.d("SUNSET","Setting night to 1");
-											m_hu_tra.night_toggle(1);
-											last_state=1;
-											}
-				   }
-			  }
-			  
-}	
-
 public void addListenerOnButton() {
 	
 	
@@ -2000,7 +2031,7 @@ public void UiChangeListener()
             decorView.setOnSystemUiVisibilityChangeListener (new View.OnSystemUiVisibilityChangeListener() {
             @Override
             public void onSystemUiVisibilityChange(int visibility) {
-				gb.xxy.hr.hu_uti.logd("System bar visible");
+				hu_uti.logd("System bar visible");
                 if ((visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) {
                     decorView.setSystemUiVisibility(
                             View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -2014,7 +2045,6 @@ public void UiChangeListener()
         });
     }
  
-// Light Sensor - Change code to toggle day/night if below/above level
 private final static SensorEventListener LightSensorListener = new SensorEventListener(){
 public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
@@ -2023,222 +2053,172 @@ public void onAccuracyChanged(Sensor sensor, int accuracy) {
 
  public void onSensorChanged(SensorEvent event) {
   if( event.sensor.getType() == Sensor.TYPE_LIGHT){
-	 // if (curr_lux-Math.round(event.values[0])<-10 || curr_lux-Math.round(event.values[0])>10)
-		 if (connection_ok && ((event.timestamp-lastnightswitch)/1000000000>10))
-		 {
-			 Log.d("SENSOR","Value Changed: " + event.timestamp);
-			 lastnightswitch=event.timestamp;
-			  if (event.values[0]<lux_t && last_state!=1)
-			  {
-				    m_hu_tra.night_toggle(1);
-					last_state=1;
-			  }
-			  else if (event.values[0]>=lux_t && last_state!=0)
-			  {
-				    m_hu_tra.night_toggle(0);
-					last_state=0;
-			  }
-		 }
+	  if (curr_lux-Math.round(event.values[0])<-10 || curr_lux-Math.round(event.values[0])>10)
+  curr_lux=Math.round(event.values[0]);
   }
   
  }
 	 };
-
-	 
-	 
-// Location Listener
-
-public void onLocationChanged(Location location) {
-    // TODO Auto-generated method stub
-	if (night_mode==1 && ((System.currentTimeMillis()-last_calculate)/1000)>600) {
-	Log.d("SUNSET","Location manager updated, curr speed is: " +location.getSpeed());
-	//Toast.makeText (m_context, "Recalculating sunset/sunrise:...", Toast.LENGTH_LONG).show ();  
-  	Calculate_Sunset_Sunrise(location.getLatitude(), location.getLongitude());
-	last_calculate=System.currentTimeMillis();
-	}
-	else if (auto_adjust_audio && connection_ok)
-	{
-		int curr_speed=0;
-		if (location.getSpeed()>=8.3333 && location.getSpeed()<13.8889)
-			curr_speed=1;
-		if (location.getSpeed()>=13.8889 && location.getSpeed()<22.222)
-			curr_speed=2;
-		else if (location.getSpeed()>=22.222 && location.getSpeed()<30.5556)
-			curr_speed=3;
-		else if (location.getSpeed()>=30.5556 && location.getSpeed()<36.1111)
-			curr_speed=4;
-		else if (location.getSpeed()>36.111)
-			curr_speed=5;
-		
-		int vol_action=0;
-		if ((curr_speed-last_speed)>0)
-			vol_action=24;
-		else if ((curr_speed-last_speed)<0)
-			vol_action=25;
-		
-		byte[] ba_key;
-		ba_key=new byte [] {(byte)0x0A,(byte)vol_action,(byte)0x01};
-		 int x = Math.abs(curr_speed-last_speed);
-		for (int i=1;i<=x;i++)
-		{
-		m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-		gb.xxy.hr.hu_uti.ms_sleep (50); 	
-		}
-	last_speed=curr_speed;	
-	}
-    
-}
-
-
-public void onProviderDisabled(String provider) {
-    // TODO Auto-generated method stub
-
-}
-
-
-public void onProviderEnabled(String provider) {
-    // TODO Auto-generated method stub
-
-}
-
-
-public void onStatusChanged(String provider, int status, Bundle extras) {
-    // TODO Auto-generated method stub
-
-}
-
-	 
-	 
-	 
-
-	 
-	 
-// Hardware Key
-    public boolean onKeyUp(int keyCode, KeyEvent event) {
-       byte[] ba_key;
+ 
+ 
+  public boolean onKeyUp(int keyCode, KeyEvent event) {
 	SharedPreferences SP = PreferenceManager.getDefaultSharedPreferences(m_context);
-	boolean hires=SP.getBoolean("hires",false); 
-
-	switch (keyCode) {
-        case KeyEvent.KEYCODE_VOLUME_UP:
-			ba_key=new byte [] {(byte)0x0A,(byte)0x18,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
+	boolean hires=SP.getBoolean("hires",false);
+	if (hires)
+	   switch (keyCode) {
+        case KeyEvent.KEYCODE_M:
+			
+              m_hu_tra.touch_send ((byte)0, 1260, 10);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 1260, 10);
             return true;
-       case KeyEvent.KEYCODE_VOLUME_DOWN:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x19,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_NEXT:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x57,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x58,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x55,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_PLAY:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x55,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_PAUSE:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x55,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_STOP:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x56,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_MEDIA_REWIND:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x59,(byte)0x01};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_CALL:
-            ba_key=new byte [] {(byte)0x0A,(byte)0x05,(byte)0x00};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-			last_possition=5;
-        return true;
-       case KeyEvent.KEYCODE_F: // SAME AS CALL CONVENIENCE BUTTON
-            ba_key=new byte [] {(byte)0x0A,(byte)0x05,(byte)0x00};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-			last_possition=5;
-        return true;
-       case KeyEvent.KEYCODE_M: //mic
-            ba_key=new byte [] {(byte)0x0A,(byte)0x54,(byte)0x00};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-        return true;
-       case KeyEvent.KEYCODE_H: //home screen (middle)
-            ba_key=new byte [] {(byte)0x0A,(byte)0x03,(byte)0x00};
-            m_hu_tra.aa_cmd_send(8, ba_key, 0, null,"");
-			last_possition=3;
-        return true;
-        case KeyEvent.KEYCODE_D: //home screen (middle){0x80, 0x03, 0x52, 2, 8, cmd_buf[1]};
-             m_hu_tra.night_toggle(0);
-        return true;
-        case KeyEvent.KEYCODE_N: //home screen (middle){0x80, 0x03, 0x52, 2, 8, cmd_buf[1]};
-            m_hu_tra.night_toggle(1);
-        return true;
-		
-		case KeyEvent.KEYCODE_DPAD_LEFT:
+        case KeyEvent.KEYCODE_N:
+			  last_possition=0;
+              m_hu_tra.touch_send ((byte)0, 50, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 700);
+            return true;
+        case KeyEvent.KEYCODE_P:
+			  last_possition=1;
+              m_hu_tra.touch_send ((byte)0, 300, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 300, 700);
+            return true;
+        case KeyEvent.KEYCODE_H:
+			  last_possition=2;              
+			  m_hu_tra.touch_send ((byte)0, 640, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 640, 700);
+            return true;
+        case KeyEvent.KEYCODE_E:
+			  last_possition=3;              
+			  m_hu_tra.touch_send ((byte)0, 900, 700);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 900, 700);
+            return true;
+        case KeyEvent.KEYCODE_F:
+              m_hu_tra.touch_send ((byte)0, 900, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 900, 500);
+            return true;
+        case KeyEvent.KEYCODE_S:
+              m_hu_tra.touch_send ((byte)0, 640, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 640, 500);
+            return true;
+        case KeyEvent.KEYCODE_R:
+              m_hu_tra.touch_send ((byte)0, 500, 500);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 500, 500);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_UP:
+              m_hu_tra.touch_send ((byte)0, 50, 200);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 200);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_DOWN:
+              m_hu_tra.touch_send ((byte)0, 50, 550);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 550);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_LEFT:
 		if (last_possition>0) {
 			last_possition--;
-			 if (hires) {
               m_hu_tra.touch_send ((byte)0, (last_possition-1)*300+50, 700);
 			  hu_uti.ms_sleep(100);
 			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*300+50, 700);
-			 }
-			 else {
-			 m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
-			 }
 		}
             return true;
         case KeyEvent.KEYCODE_DPAD_RIGHT:
 		if (last_possition<4) {
 			last_possition++;
-            if (hires) {
-              m_hu_tra.touch_send ((byte)0, (last_possition-1)*300+50, 700);
+               m_hu_tra.touch_send ((byte)0, (last_possition-1)*300+50, 700);
 			  hu_uti.ms_sleep(100);
 			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*300+50, 700);
-			 }
-			 else {
-			 m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
-			 }
 		}
-		case KeyEvent.KEYCODE_DPAD_UP:
-		if (hires)
-			{ m_hu_tra.touch_send ((byte)0, 50, 200);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, 50, 200); 
-			}
-			  else {
-              m_hu_tra.touch_send ((byte)0, 50, 120);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, 50, 120);}
             return true;
-        case KeyEvent.KEYCODE_DPAD_DOWN:
-			 if (hires)
-			 {m_hu_tra.touch_send ((byte)0, 50, 550);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, 50, 550); 
-			 }
-			 else
-			 {m_hu_tra.touch_send ((byte)0, 50, 370);
-			  hu_uti.ms_sleep(100);
-			  m_hu_tra.touch_send ((byte)1, 50, 370); }
-            return true;
-		
-		
+        
+       
         default:
             return super.onKeyUp(keyCode, event);
     }
-
+	else 
+     switch (keyCode) {
+        case KeyEvent.KEYCODE_M:
+              m_hu_tra.touch_send ((byte)0, 780, 10);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 780, 10);
+            return true;
+        case KeyEvent.KEYCODE_N:
+			  last_possition=0;
+              m_hu_tra.touch_send ((byte)0, 10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 10, 160);
+            return true;
+        case KeyEvent.KEYCODE_P:
+			  last_possition=1;
+              m_hu_tra.touch_send ((byte)0, 200, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 200, 160);
+            return true;
+        case KeyEvent.KEYCODE_H:
+			  last_possition=2;		
+              m_hu_tra.touch_send ((byte)0, 400, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 400, 160);
+            return true;
+        case KeyEvent.KEYCODE_E:
+			  last_possition=3;		
+              m_hu_tra.touch_send ((byte)0, 600, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 600, 160);
+            return true;
+        case KeyEvent.KEYCODE_F:
+              m_hu_tra.touch_send ((byte)0, 500, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 500, 350);
+            return true;
+        case KeyEvent.KEYCODE_S:
+              m_hu_tra.touch_send ((byte)0, 400, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 400, 350);
+            return true;
+        case KeyEvent.KEYCODE_R:
+              m_hu_tra.touch_send ((byte)0, 300, 350);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 300, 350);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_UP:
+              m_hu_tra.touch_send ((byte)0, 50, 120);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 120);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_DOWN:
+              m_hu_tra.touch_send ((byte)0, 50, 370);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, 50, 370);
+            return true;
+        case KeyEvent.KEYCODE_DPAD_LEFT:
+		if (last_possition>0) {
+			last_possition--;
+              m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
+		}
+            return true;
+        case KeyEvent.KEYCODE_DPAD_RIGHT:
+		if (last_possition<4) {
+			last_possition++;
+              m_hu_tra.touch_send ((byte)0, (last_possition-1)*200+10, 460);
+			  hu_uti.ms_sleep(100);
+			  m_hu_tra.touch_send ((byte)1, (last_possition-1)*200+10, 460);
+		}
+            return true;
+        
+       
+        default:
+            return super.onKeyUp(keyCode, event);
+    }
 }
 
   
@@ -2251,7 +2231,7 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
 
   private boolean wifi_deinit_bypass = false;//true;
   private int wifi_deinit () {
-    gb.xxy.hr.hu_uti.logd ("m_wifidir_mgr: " + m_wifidir_mgr + "  m_wifidir_chan: " + m_wifidir_chan + "  m_wifidir_bcr: " + m_wifidir_bcr);
+    hu_uti.logd ("m_wifidir_mgr: " + m_wifidir_mgr + "  m_wifidir_chan: " + m_wifidir_chan + "  m_wifidir_bcr: " + m_wifidir_bcr);
 
     if (wifi_deinit_bypass)
       return (-1);
@@ -2262,22 +2242,22 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
     m_wifidir_mgr.stopPeerDiscovery (m_wifidir_chan, new WifiP2pManager.ActionListener () {
       @Override
       public void onSuccess () {
-        gb.xxy.hr.hu_uti.logd ("stopPeerDiscovery Success");
+        hu_uti.logd ("stopPeerDiscovery Success");
       }
       @Override
       public void onFailure (int reasonCode) {
-        gb.xxy.hr.hu_uti.loge ("stopPeerDiscovery Failure reasonCode: " + reasonCode);
+        hu_uti.loge ("stopPeerDiscovery Failure reasonCode: " + reasonCode);
       }
     });
 //*/
     WifiP2pManager.ActionListener wal = new WifiP2pManager.ActionListener () {
       @Override
       public void onSuccess () {
-        gb.xxy.hr.hu_uti.logd ("stopPeerDiscovery/cancelConnect/removeGroup Success");
+        hu_uti.logd ("stopPeerDiscovery/cancelConnect/removeGroup Success");
       }
       @Override
       public void onFailure (int reasonCode) {
-        gb.xxy.hr.hu_uti.loge ("stopPeerDiscovery/cancelConnect/removeGroup Failure reasonCode: " + reasonCode);
+        hu_uti.loge ("stopPeerDiscovery/cancelConnect/removeGroup Failure reasonCode: " + reasonCode);
       }
     };
 
@@ -2314,7 +2294,7 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
     m_wifidir_chan = m_wifidir_mgr.initialize (this, getMainLooper (), null);
     m_wifidir_bcr = new WiFiDirectBroadcastReceiver (m_wifidir_mgr, m_wifidir_chan, this);
 
-    gb.xxy.hr.hu_uti.logd ("m_wifidir_mgr: " + m_wifidir_mgr + "  m_wifidir_chan: " + m_wifidir_chan + "  m_wifidir_bcr: " + m_wifidir_bcr);
+    hu_uti.logd ("m_wifidir_mgr: " + m_wifidir_mgr + "  m_wifidir_chan: " + m_wifidir_chan + "  m_wifidir_bcr: " + m_wifidir_bcr);
 
     mIntentFilter = new IntentFilter ();
     mIntentFilter.addAction (WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
@@ -2325,11 +2305,11 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
     WifiP2pManager.ActionListener wal = new WifiP2pManager.ActionListener () {
       @Override
       public void onSuccess () {
-        gb.xxy.hr.hu_uti.logd ("createGroup Success");                            // This is only triggered after we have a connection
+        hu_uti.logd ("createGroup Success");                            // This is only triggered after we have a connection
       }
       @Override
       public void onFailure (int reasonCode) {
-        gb.xxy.hr.hu_uti.loge ("createGroup Failure reasonCode: " + reasonCode);  // Already exists ?: reateGroup Failure reasonCode: 2
+        hu_uti.loge ("createGroup Failure reasonCode: " + reasonCode);  // Already exists ?: reateGroup Failure reasonCode: 2
       }
     };
     m_wifidir_mgr.createGroup (m_wifidir_chan, wal);
@@ -2340,12 +2320,12 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
   }
 
   private void wifi_resume () {
-    gb.xxy.hr.hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
+    hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
 
   }
 
   private void wifi_pause () {
-    gb.xxy.hr.hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
+    hu_uti.logd ("m_wifidir_bcr: " + m_wifidir_bcr);
 
   }
 
@@ -2357,7 +2337,7 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
   PeerListListener myPeerListListener = new PeerListListener () {
     @Override
     public void onPeersAvailable (WifiP2pDeviceList peers) {
-      gb.xxy.hr.hu_uti.logd ("myPeerListListener onPeersAvailable peers: " + peers);
+      hu_uti.logd ("myPeerListListener onPeersAvailable peers: " + peers);
     }
   };
 
@@ -2379,43 +2359,43 @@ public void onStatusChanged(String provider, int status, Bundle extras) {
     @Override
     public void onReceive (Context context, Intent intent) {
       String action = intent.getAction ();
-      gb.xxy.hr.hu_uti.logd ("action: " + action);
+      hu_uti.logd ("action: " + action);
 
       if (action.equals (WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)) {          // Check to see if Wi-Fi is enabled and notify appropriate activity
         int state = intent.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, -1);
         if (state == WifiP2pManager.WIFI_P2P_STATE_ENABLED) {
-          gb.xxy.hr.hu_uti.logd ("STATE_CHANGED Wifi P2P is enabled");
+          hu_uti.logd ("STATE_CHANGED Wifi P2P is enabled");
         }
         else {
-          gb.xxy.hr.hu_uti.logd ("STATE_CHANGED Wi-Fi P2P is not enabled");
+          hu_uti.logd ("STATE_CHANGED Wi-Fi P2P is not enabled");
         }
       }
       else if (action.equals (WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)) {
-        gb.xxy.hr.hu_uti.logd ("PEERS_CHANGED");        // Request currently available peers from the wifi p2p manager. This is an asynchronous call and the calling activity is notified with a callback on PeerListListener.onPeersAvailable()
+        hu_uti.logd ("PEERS_CHANGED");        // Request currently available peers from the wifi p2p manager. This is an asynchronous call and the calling activity is notified with a callback on PeerListListener.onPeersAvailable()
         if (m_wifidir_mgr != null) {
             m_wifidir_mgr.requestPeers (m_wifidir_chan, myPeerListListener);
         }
       }
       else if (action.equals (WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)) {
-        gb.xxy.hr.hu_uti.logd ("CONNECTION_CHANGED");          // Respond to new connection or disconnections
+        hu_uti.logd ("CONNECTION_CHANGED");          // Respond to new connection or disconnections
       }
       else if (action.equals (WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)) {
-        gb.xxy.hr.hu_uti.logd ("THIS_DEVICE_CHANGED");          // Respond to this device's wifi state changing
+        hu_uti.logd ("THIS_DEVICE_CHANGED");          // Respond to this device's wifi state changing
       }
       else if (action.equals (UiModeManager.ACTION_ENTER_CAR_MODE)) {
-        gb.xxy.hr.hu_uti.logd ("ACTION_ENTER_CAR_MODE");
+        hu_uti.logd ("ACTION_ENTER_CAR_MODE");
       }
       else if (action.equals (UiModeManager.ACTION_EXIT_CAR_MODE)) {
-        gb.xxy.hr.hu_uti.logd ("ACTION_EXIT_CAR_MODE");
+        hu_uti.logd ("ACTION_EXIT_CAR_MODE");
       }
       else if (action.equals (UiModeManager.ACTION_ENTER_DESK_MODE)) {
-        gb.xxy.hr.hu_uti.logd ("ACTION_ENTER_DESK_MODE");
+        hu_uti.logd ("ACTION_ENTER_DESK_MODE");
       }
       else if (action.equals (UiModeManager.ACTION_EXIT_DESK_MODE)) {
-        gb.xxy.hr.hu_uti.logd ("ACTION_EXIT_DESK_MODE");
+        hu_uti.logd ("ACTION_EXIT_DESK_MODE");
       }
       else {
-        gb.xxy.hr.hu_uti.loge ("OTHER !! ??");
+        hu_uti.loge ("OTHER !! ??");
       }
     }
 

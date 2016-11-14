@@ -20,7 +20,7 @@ public class hu_self_phone extends Service{
 	private BroadcastReceiver receiver;
 	private BroadcastReceiver dock_receiver;
     private static UiModeManager          m_uim_mgr   = null;
-
+	
 	//private boolean is_car_mode = true;
 	@Override
 	public IBinder onBind(Intent arg0) {
@@ -54,74 +54,7 @@ public class hu_self_phone extends Service{
 			  }
 		  }
 	  }).start();
-	  
-	IntentFilter filter = new IntentFilter();
-    filter.addAction("android.intent.action.PHONE_STATE");
-	filter.addAction("android.intent.action.DOCK_EVENT");
-  receiver = new BroadcastReceiver() {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-		Log.d(TAG,"receiver fired");
-	if (intent.getAction().equals("android.intent.action.DOCK_EVENT"))
-	{
-		int dockState = intent.getIntExtra(intent.EXTRA_DOCK_STATE, -1);
-		Log.d(TAG,"Dock change detected, current value is: "+ dockState);
-	
-	}
-    else if (intent.getAction().equals(Intent.ACTION_NEW_OUTGOING_CALL)) {
-		 if (m_uim_mgr.getCurrentModeType()==3) {
-		Log.d(TAG, "Outgoing call detected");
-		try {
-		Thread.sleep(3000);
-		}
-		catch (Throwable t) {
-				  Log.e (TAG,"Throwable: " + t);
-				}
-		Log.d(TAG, "Sending home key");
-		
-		Log.d(TAG,"Current mode is: " + m_uim_mgr.getCurrentModeType());		
-	
-        m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME);
-		 }
-		else {		 
-		LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(hu_self_phone.this);
-        localBroadcastManager.sendBroadcast(new Intent("kill_switch"));
-		}
-    } else {
-		TelephonyManager tm = (TelephonyManager) context.getSystemService(Service.TELEPHONY_SERVICE);
 
-        switch (tm.getCallState()) {
-       
-        case TelephonyManager.CALL_STATE_OFFHOOK:
-
-		
-		
-           				Log.d(TAG, "Off the hook state detected");
-						Log.d(TAG,"Current mode is: " + m_uim_mgr.getCurrentModeType());
-						if (m_uim_mgr.getCurrentModeType()==3)
-						{
-						try {
-				Thread.sleep(3000);
-						}
-		catch (Throwable t) {
-				 Log.e (TAG,"Throwable: " + t);
-				}
-				Log.d(TAG, "Sending home key");
-                m_uim_mgr.enableCarMode(UiModeManager.ENABLE_CAR_MODE_GO_CAR_HOME); 
-						}
-						else
-						{
-					LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(hu_self_phone.this);
-					localBroadcastManager.sendBroadcast(new Intent("kill_switch"));
-						}
-            break;
-					
-				}
-				}
-			}
-
-			  };
-		registerReceiver(receiver, filter);	
 		
 		
 	
@@ -135,7 +68,8 @@ public class hu_self_phone extends Service{
 		// TODO Auto-generated method stub
 		super.onStart(intent, startId);
 		Log.d(TAG, "FirstService started");
-		
+		Intent my = getPackageManager().getLaunchIntentForPackage("gb.xxy.hr");
+		startActivity(my);
 	}
  
 	@Override

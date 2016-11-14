@@ -48,24 +48,18 @@ public class hu_tra {
   private long ip_result;
   private boolean is_stopped;
   private boolean initial_day_night = false;
-
+  private int last_state = -1;
  
   private String last_mode; 
  // private boolean do_what;
   
   private static final int AA_CH_CTR = 0;                               // Sync with hu_tra.java, hu_aap.h and hu_aap.c:aa_type_array[]
-  // private static final int AA_CH_SEN = 1;
-  // private static final int AA_CH_VID = 2;
-  // private static final int AA_CH_TOU = 3;
-  private static final int AA_CH_SEN = 2;
-  private static final int AA_CH_VID = 3;
-  private static final int AA_CH_TOU = 1;
-  // public  static final int AA_CH_AUD = 4;
-  // public  static final int AA_CH_AU1 = 5;
-  // public  static final int AA_CH_AU2 = 6;
-  public  static final int AA_CH_AUD = 6;
-  public  static final int AA_CH_AU1 = 4;
-  public  static final int AA_CH_AU2 = 5;
+  private static final int AA_CH_SEN = 1;
+  private static final int AA_CH_VID = 2;
+  private static final int AA_CH_TOU = 3;
+  public  static final int AA_CH_AUD = 4;
+  public  static final int AA_CH_AU1 = 5;
+  public  static final int AA_CH_AU2 = 6;
   private static final int AA_CH_MIC = 7;
   private static final int AA_CH_MAX = 7;
  
@@ -141,7 +135,7 @@ Internal classes:
   }  
   
   private long lastheartbeat = 0;
-
+  private long lastnightswitch = 0;
   private boolean m_mic_active = false;
   private boolean touch_sync = true;//      // Touch sync times out within 200 ms on second touch with TCP for some reason.
     private volatile boolean m_stopping = false; 
@@ -220,7 +214,7 @@ Internal classes:
       m_stopping = true;                                                // Terminate thread
     }
   }
-
+//We have to pass the IP and the audio flag setting from Javas to C somehow..., start here.
   public int jni_aap_start (String myip_string) {                                         // Start JNI Android Auto Protocol and Main Thread. Called only by usb_attach_handler(), usb_force() & hu_act.wifi_long_start()
 
     if (m_hu_act.disable_video_started_set)
@@ -270,16 +264,15 @@ Internal classes:
   }
 
 
-  public int night_toggle (int state_to) {
+  private int night_toggle (int state_to) {
 	byte x = (byte) state_to;
 	byte [] data = {9, x, 0, 0, 0, 0, 0, 0};          
 	int ret = aa_cmd_send (data.length, data, 0, null,"");           
-	//hu_uti.ms_sleep (100);  
-	hu_uti.logd("Night toggle: "+state_to);	
+	//hu_uti.ms_sleep (100);   
 	return(0);
   }
   
-  public int byebye_send () {                                          // Send Byebye request. Called only by transport_stop (), tra_thread:run()
+  private int byebye_send () {                                          // Send Byebye request. Called only by transport_stop (), tra_thread:run()
     hu_uti.logd ("");
     byte [] cmd_buf = {AA_CH_CTR, 0x0b, 0, 0, 0, 0x0f, 0x08, 0};          // Byebye Request:  000b0004000f0800  00 0b 00 04 00 0f 08 00
     int ret = aa_cmd_send (cmd_buf.length, cmd_buf, 0, null,"");           // Send
@@ -290,7 +283,7 @@ Internal classes:
   private byte [] fixed_cmd_buf = new byte [256];
   private byte [] fixed_res_buf = new byte [65536 * 32];
                                                                         // Send AA packet/HU command/mic audio AND/OR receive video/output audio/audio notifications
-  public int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf, String myip_string) {
+  private int aa_cmd_send (int cmd_len, byte [] cmd_buf, int res_len, byte [] res_buf, String myip_string) {
     //synchronized (this) {
 
     if (cmd_buf == null || cmd_len <= 0) {
@@ -327,15 +320,15 @@ Internal classes:
        
 	}
 	else if (ret==0) {
-		// if ((((System.currentTimeMillis() - lastheartbeat)/1000)>40) && lastheartbeat!=0) {
-					// hu_uti.logd("no heartbeat...!");
+		if ((((System.currentTimeMillis() - lastheartbeat)/1000)>40) && lastheartbeat!=0) {
+					hu_uti.logd("no heartbeat...!");
 				
-						// m_hu_act.video_started_set(false);
+						m_hu_act.video_started_set(false);
 						
-						// m_stopping=true;
-						// return(-1);
+						m_stopping=true;
+						return(-1);
 		
-		// }
+		}
 		
 	}
     else if (ret == 1) {                                                     // If mic stop...
@@ -374,7 +367,7 @@ Internal classes:
     //Check if we need to change Day/night
 	// Assuming day and checking if need night...
 	//hu_uti.logd("CAR NIGHT MODE: " + m_context.getResources().getString(R.string.isNight) +  "hu_act.night_mode==1" + hu_act.night_mode);
-	/*if (((System.currentTimeMillis() - lastnightswitch)/1000)>20) {
+	if (((System.currentTimeMillis() - lastnightswitch)/1000)>20) {
 	int daynight=0;
 	if (hu_act.night_mode==3)
 		daynight=1;
@@ -388,7 +381,7 @@ Internal classes:
 	night_toggle(daynight);
 	lastnightswitch=System.currentTimeMillis();
 	}
-	}*/
+	}
 	}
     return (ret);
 
@@ -491,13 +484,13 @@ Internal classes:
     hu_uti.logd ("intent: " + intent);// + "  action: " + action);
 
     IntentFilter filter = new IntentFilter ();
-    IntentFilter filter2 = new IntentFilter ("gb.xxy.hr");
+   // IntentFilter filter2 = new IntentFilter ("gb.xxy.hr");
     filter.addAction (UsbManager.ACTION_USB_DEVICE_ATTACHED);
     filter.addAction (UsbManager.ACTION_USB_DEVICE_DETACHED);
     filter.addAction (hu_uti.str_usb_perm);                             // Our App specific Intent for permission request
     m_usb_receiver = new usb_receiver ();                               // Register BroadcastReceiver for USB attached/detached
     Intent first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter);
-    first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter2);
+  //  first_sticky_intent = m_context.registerReceiver (m_usb_receiver, filter2);
     hu_uti.logd ("first_sticky_intent: " + first_sticky_intent);
 
 	
@@ -579,9 +572,9 @@ Internal classes:
       UsbDevice device = intent.<UsbDevice>getParcelableExtra (UsbManager.EXTRA_DEVICE);
       hu_uti.logd ("USB BCR intent: " + intent);
 
-	  if (intent.hasExtra("message")) {
-	 hu_uti.logd ("Launched by USB connection event device: " + device);
-	  String message = intent.getStringExtra("message");
+//	  if (intent.hasExtra("message")) {
+	// hu_uti.logd ("Launched by USB connection event device: " + device);
+//	  String message = intent.getStringExtra("message");
 
 //	  String x= "0";x=message.substring(0,4);
 //	  String y= "0";y=message.substring(4);
@@ -594,18 +587,15 @@ Internal classes:
 			//int my_len = message.length()-1;
 			//byte[] data = new byte[my_len / 2+1];
 			//data[0]=(byte)Integer.parseInt(message.substring(0,1));
-			  long ts = android.os.SystemClock.elapsedRealtime () * 1000000L;   // Timestamp in nanoseconds = microseconds x 1,000,000
-			       // Encode timestamp
-			 int my_len = message.length()-1;
-			 byte[] data = new byte[(my_len / 2)+2];
-			 data[0]=8;
-             data[1]=(byte)Integer.parseInt(message.substring(0,1));
-			 for (int mi = 1; mi < my_len; mi += 2) {
-				  data[(mi / 2)+1] = (byte) ((Character.digit(message.charAt(mi), 16) << 4)
-									  + Character.digit(message.charAt(mi+1), 16));
-								 }
-				//hu_uti.varint_encode (ts, data,  1+(my_len / 2));     				 
-			aa_cmd_send (data.length, data, 0, null,"");
+			
+			// int my_len = message.length();
+			// byte[] data = new byte[(my_len / 2)+1];
+			// data[0]=9;
+			// for (int mi = 0; mi < my_len; mi += 2) {
+				 // data[(mi / 2)+1] = (byte) ((Character.digit(message.charAt(mi), 16) << 4)
+									 // + Character.digit(message.charAt(mi+1), 16));
+								// }
+								
 	/*			if (message=="1")
 				{					
 		ba_touch=null;
@@ -633,8 +623,8 @@ Internal classes:
 			*/
 			// int ret = aa_cmd_send (data.length, data, 0, null,"");           // Send
 			 // hu_uti.ms_sleep (100);            					
-	  }
-      else if (device != null) {
+	//  }
+      if (device != null) {
         String action = intent.getAction ();
 		
 	
@@ -1153,7 +1143,21 @@ Internal classes:
  
    
   
+ public void usb_force () {                                            // Called only by hu_act:preset_select_lstnr:onClick()
+    hu_uti.logd("forced usb");
+	if (m_usb_connected)
+      return;
+  
+    if (hu_uti.su_installed_get ()) {
+      String cmd = "setenforce 0 ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null";
+      hu_uti.sys_run (cmd, true);
+    }
 
+    m_ep_in_addr  = 255;
+    m_ep_out_addr = 0;  // USB Force
+	m_hu_act.video_started_set(true);
+    jni_aap_start ("");
+  }
 
   public void presets_select (int idx) {                                // Called only by hu_act:preset_select_lstnr:onClick()
     hu_uti.logd ("idx: " + idx + "  name: " + usb_list_name [idx] + " device : " + usb_list_device [idx]);
