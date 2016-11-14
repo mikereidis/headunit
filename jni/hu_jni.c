@@ -67,16 +67,24 @@
       else if (cmd_len > 6 && cmd_buf [4] == 0x80 && cmd_buf [5] == 1)  // If Touch event...
         chan = AA_CH_TOU;
      else if (cmd_buf[0] == 8) {
-		 logd("we have to se force connection in place");
-		
-		  dont_send=1;
-		  return(-1);
+		// logd("we have to se force connection in place");
+         hu_aap_enc_send (2, & cmd_buf [1], cmd_len - 2);
+		 hex_dump ("HEX_DUMP: ", 64, & cmd_buf [1], cmd_len-2);
+        dont_send=1;
+		  return(0);
+	 }
+	      else if (cmd_buf[0] == 10) {
+		 //logd("we have to se force connection in place");
+		 byte rspds2 [] = {0x80,0x01,0x08,0xe8,0x9f,0x9d,0xd0,0xe9,0x96,0xe5,0x8b,0x14,0x22,0x0A,0x0A,0x08,0x08, cmd_buf[1], 0x10, cmd_buf[2], 0x18,0x00,0x20,0x00};
+         hu_aap_enc_send (1, rspds2,sizeof(rspds2));
+        dont_send=1;
+		  return(0);
 	 }
 	  else if (cmd_buf[0] == 9) {
-		 logd("Testing night toggle %d");
+		 //logd("Testing night toggle %d");
 		    
 			  byte rspds2 [] = {0x80, 0x03, 0x52, 2, 8, cmd_buf[1]};     
-              hu_aap_enc_send (1, rspds2, 6); 
+              hu_aap_enc_send (2, rspds2, 6); 
 			/*
 			byte* rspds = malloc(sizeof(byte) * 6);
 		    rspds[0] = -128; 

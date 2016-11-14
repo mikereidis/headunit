@@ -162,7 +162,9 @@
   int log_packet_info = 1;
 
   int hu_aap_tra_send (byte * buf, int len, int tmo) {                  // Send Transport data: chan,flags,len,type,...
-                                                                        // Need to send when starting
+       
+	//hex_dump (" W/    hu_aap_enc_send: ", 256, buf, len);
+	   // Need to send when starting
     if (iaap_state != hu_STATE_STARTED && iaap_state != hu_STATE_STARTIN) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (-1);
@@ -201,7 +203,7 @@
     if (chan == AA_CH_MIC && buf [0] == 0 && buf [1] == 0) {            // If Mic PCM Data
       flags = 0x0b;                                                     // Flags = First + Last + Encrypted
     }
-//hex_dump (" W/    hu_aap_enc_send: ", 16, buf, len);
+// hex_dump (" W/    unenc_send: ", 16, buf, len);
 /*#ifndef NDEBUG
 //    if (ena_log_verbo && ena_log_aap_send) {
    // if (log_packet_info) { // && ena_log_aap_send)
@@ -234,12 +236,13 @@
 
     hu_aap_tra_set (chan, flags, -1, enc_buf, bytes_read + 4);          // -1 for type so encrypted type position is not overwritten !!
     hu_aap_tra_send (enc_buf, bytes_read + 4, iaap_tra_send_tmo);           // Send encrypted data to AA Server
-
+    //hex_dump ("SSL DATA: ", 256, enc_buf, bytes_read+4);
     return (0);
   }
 
 
-    byte sd_buf [] = {0, 6,        //8, 0};                                            // Svc Disc Rsp = 6
+//OLD INITIALITAZION SEQUENCE KEEP IT HERE JUST FOR DATA ABOUT SENSORS, OTHERWISE NOT IN USE!
+/*  byte sd_buf [] = {0, 6,        //8, 0};                                            // Svc Disc Rsp = 6
 /*
 cq  (co[  (str  (str  (str  (str  (int  (str  (str  (str  (str  (boo  (boo    MsgServiceDiscoveryResponse
 
@@ -271,28 +274,33 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                                                 //  c:0/1 for 30/60 fps   d:widthMargin e:heightMargin f:density/fps g: ?
   private boolean f                 = false;                            // f
 
-*/
+
 // D/CAR.GAL ( 3804): Service id=1 type=MediaSinkService { codec type=1 { codecResolution=1 widthMargin=0 heightMargin=0 density=30}}
 
             // CH 1 Sensors:                      //cq/co[]
 //*
-                        0x0A, 4 + 4*4,//co: int, cm/cn[]
-                                      0x08, AA_CH_SEN,
-                                      0x12, 4*4,
-                                                          0x0A, 2,
-                                                                    0x08, 1, // SENSOR_TYPE_DRIVING_STATUS 12
-                                                          0x0A, 2,
-                                                                    0x08, 3, // SENSOR_TYPE_DRIVING_STATUS 12
+                         0x0A, 4*4+4,//co: int, cm/cn[]
+                                       0x08, AA_CH_SEN,
+									 // 0x22, 0x0B, 0x0A, 0x01, 0x54, 0x12, 0x06, 0x08, 0xA0, 0x06, 0x10, 0xE0, 0x03,
+									 //0x0A, 0x10, 0x08, 0x02, 0x12, 0x0C, 0x0A, 0x02, 0x08, 0x01, 0x0A, 0x02, 0x08, 0x0A, 0x0A, 0x02, 0x08, 0x0D,
+                                       0x12, 4*4,
+                                                           0x0A, 2,
+                                                                     0x08, 1, // SENSOR_TYPE_DRIVING_STATUS 12
+                                                           0x0A, 2,
+                                                                     0x08, 3, // SENSOR_TYPE_DRIVING_STATUS 12
 
-														  0x0A, 2,
-                                                                    0x08, 10, // SENSOR_TYPE_DRIVING_STATUS 12
-														  0x0A, 2,
-                                                                    0x08, 11, // SENSOR_TYPE_NIGHT_DATA 10
+														   0x0A, 2,
+                                                                     0x08, 10, // SENSOR_TYPE_DRIVING_STATUS 12
+														   0x0A, 2,
+                                                                     0x08, 11, // SENSOR_TYPE_NIGHT_DATA 10
+																	
 
 //*/
 /*  Requested Sensors: 10, 9, 2, 7, 6:
                         0x0A, 4 + 4*6,     //co: int, cm/cn[]
                                       0x08, AA_CH_SEN,  0x12, 4*6,
+				USED BY DHU: 0A 01 54 12 
+				06 08 A0 06 10 E0 03 0A
                                                           0x0A, 2,
                                                                     0x08, 11, // SENSOR_TYPE_DRIVING_STATUS 12
                                                           0x0A, 2,
@@ -305,7 +313,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                                     0x08,  1, // SENSOR_TYPE_COMPASS       10
                                                           0x0A, 2,
                                                                     0x08, 10, // SENSOR_TYPE_LOCATION       9
-//*/
+//
 //*
             // CH 2 Video Sink:
                         0x0A, 4+4+11, 0x08, AA_CH_VID,
@@ -332,7 +340,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
 												 //0x22, 11,			
                                                             //0x08, 2, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     // 1280x 720, 30 fps, 0, 0, 160 dpi    0xa0
                                                             //0x08, 3, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     // 1920x1080, 30 fps, 0, 0, 160 dpi    0xa0
-//*/
+//*
 //* Crashes on null Point reference without:
             // CH 3 TouchScreen/Input:
                         0x0A, 4+2+6,//+2+16,
@@ -346,7 +354,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                               0x08, -96,   6,    0x10, -32, 3,        //  800x 480
                                                             //0x08, -128, 10,    0x10, -48, 5,        // 1280x 720     0x80, 0x0a   0xd0, 5
                                                             //0x08, -128, 15,    0x10, -72, 8,        // 1920x1080     0x80, 0x0f   0xb8, 8
-//*/
+//*
 //*
             // CH 7 Microphone Audio Source:
                         0x0A, 4+4+7,   0x08, AA_CH_MIC,
@@ -368,7 +376,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                 // MediaPlaybackService:
                         0x0A, 4,     0x08, 6,
                                      0x4a, 0,
-//*/
+//*
 //*
                         0x12, 4, 'E', 'm', 'i', 'l',//1, 'A', // Car Manuf          Part of "remembered car"
                         0x1A, 4, 'A', 'l', 'b', 'e',//1, 'B', // Car Model
@@ -382,7 +390,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                         0x58, 0,//1,//1,//0,//1,       // ? bool (or int )    canPlayNativeMediaDuringVr
                         0x60, 0,//1,//0,//0,//1        // mHideProjectedClock     1 = True = Hide
                         //0x68, 1,
-//*/
+//*
 
 // 04-22 03:43:38.049 D/CAR.SERVICE( 4306): onCarInfo com.google.android.gms.car.CarInfoInternal[dbId=0,manufacturer=A,model=B,headUnitProtocolVersion=1.1,modelYear=C,vehicleId=null,
 // bluetoothAllowed=false,hideProjectedClock=false,driverPosition=0,headUnitMake=E,headUnitModel=F,headUnitSoftwareBuild=G,headUnitSoftwareVersion=H,canPlayNativeMediaDuringVr=false]
@@ -395,9 +403,9 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                   0x08, 1,    // int (codec type) 1 = Audio
                                                   0x10, 3,    // Audio Stream Type = 3 = MEDIA
                                                   0x1A, 8,    // AudCfg   48000hz         16bits        2chan
-                                                              //0x08, 0x80, 0xF7, 0x02,   0x10, 0x10,   0x18, 02,
+                                                              //0x08, 0x80, 0xF7, 0x02,   0x18, 0x10,   0x18, 02,
                                                                 0x08, -128,   -9, 0x02,   0x10, 0x10,   0x18, 02,
-//*/
+//*
 //*
             // CH 5 Output Audio Sink1:
                         0x0A, 4+6+7, 0x08, AA_CH_AU1,
@@ -407,7 +415,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                   0x1A, 7,    // AudCfg   16000hz         16bits        1chan
                                                               //0x08, 0x80, 0x7d,         0x10, 0x10,   0x18, 1,
                                                                 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
-//*/
+//*
 ////*
             // CH 6 Output Audio Sink2:
                         0x0A, 4+6+7, 0x08, AA_CH_AU2,
@@ -417,12 +425,47 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
                                                   0x1A, 7,    // AudCfg   16000hz         16bits        1chan
                                                               //0x08, 0x80, 0x7d,         0x10, 0x10,   0x18, 1,
                                                                 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
-//*/
+//*
 
     };
+*/
 
-#define sd_buf_aud_len  2+4+6+8+2+4+6+7+2+4+6+7   // 58
+byte sd_buf2 []={0x00, 0x06, 
+//Touch+input CHANNEL
+0x0A, 0x0F, 0x08, 0x01, 0x22, 0x0B, 0x0A, 0x01, 0x54, 0x12, 0x06, 0x08, 0xA0, 0x06, 0x10, 0xE0, 0x03, 
 
+// SENSOR CHANNEL
+0x0A, 0x10, 0x08, 0x02, 0x12, 0x0C, 0x0A, 0x02, 0x08, 0x01, 0x0A, 0x02, 0x08, 0x0A, 0x0A, 0x02, 0x08, 0x0D,
+//                       18,  12,     10,    2,    8,    1,  10,   2,     8,    10, 10,    2,    8,    13
+
+
+// Video CHANNEL
+0x0A, 0x15, 0x08, 0x03, 0x1A, 0x11, 0x08, 0x03, 0x22, 0x0D, 0x08, 0x01, 0x10, 0x02, 0x18, 0x00, 0x20, 0x00, 0x28, -96, 0x01, 0x30, 0x00, 
+// MIC CHANNEL
+0x0A, 4+4+7,0x08, AA_CH_MIC, 0x2A, 4+7, 0x08, 1,    0x12, 7,    0x08, -128, 0x7d, 0x10, 0x10, 0x18, 1,
+// CAR DEFINITION
+						
+                        0x12, 4, 'E', 'm', 'i', 'l',//1, 'A', // Car Manuf          Part of "remembered car"
+                        0x1A, 4, 'A', 'l', 'b', 'e',//1, 'B', // Car Model
+                        0x22, 4, '2', '0', '1', '6',//1, 'C', // Car Year           Part of "remembered car"
+                        0x2A, 4, '0', '0', '0', '1',//1, 'D', // Car Serial     Not Part of "remembered car" ??     (vehicleId=null)
+                        0x30, 0,//0,      // driverPosition
+						
+                        0x3A, 4, 'E', 'm', 'i', 'l',//1, 'E', // HU  Make / Manuf
+                        0x42, 4, 'H', 'U', '1', '5',//1, 'F', // HU  Model
+                        0x4A, 4, 'S', 'W', 'B', '1',//1, 'G', // HU  SoftwareBuild
+                        0x52, 4, 'S', 'W', 'V', '1',//1, 'H', // HU  SoftwareVersion
+                        0x58, 0,//1,//1,//0,//1,       // ? bool (or int )    canPlayNativeMediaDuringVr
+                        0x60, 0,//1,//0,//0,//1        // mHideProjectedClock     1 = True = Hide	*/	
+						
+//THE LAST 3 CHANNEL KEEP THEM HERE SO WE CAN EXCLUDE THEM IF NEED BE.
+0x0A, 4+6+7, 0x08, AA_CH_AU2, 0x1A, 6+7, 0x08, 1,  0x10, 2, 0x1A, 7, 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
+0x0A, 4+6+7, 0x08, AA_CH_AU1, 0x1A, 6+7, 0x08, 1,  0x10, 1, 0x1A, 7, 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
+0x0A, 4+6+8, 0x08, AA_CH_AUD, 0x1A, 6+8, 0x08, 1,  0x10, 3, 0x1A, 8, 0x08, -128,   -9, 0x02,   0x10, 0x10,   0x18, 02,
+
+};
+
+													
   int aa_pro_ctr_a00 (int chan, byte * buf, int len) {
     loge ("!!!!!!!!");
     return (-1);
@@ -451,17 +494,20 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
     else
       logd ("Service Discovery Request");                               // S 0 CTR b src: HU  lft:   113  msg_type:     6 Service Discovery Response    S 0 CTR b 00000000 0a 08 08 01 12 04 0a 02 08 0b 0a 13 08 02 1a 0f
 
-    int sd_buf_len = sizeof (sd_buf);
+    // int sd_buf_len = sizeof (sd_buf);
+    int sd_buf_len = sizeof (sd_buf2);
    logd("hu_app_start, use_audio value is reported as %d!",use_audio);
    if (use_audio<1)
    {
 	   logd("hu_app_start, removing audio headers!");
-      sd_buf_len -= sd_buf_aud_len;                                     // Remove audio outputs from service discovery response buf
+     sd_buf_len -= 39;   //  Last 2 channels (Audio) counting 39 bytes. Remove audio outputs from service discovery response buf
    }
    if (hires==1)
-   {  sd_buf[35]=2;
-   sd_buf[43]=-16;} //Need to increase DPI
-    return (hu_aap_enc_send (chan, sd_buf, sd_buf_len));                // Send Service Discovery Response from sd_buf
+   {  
+   sd_buf2[48]=2; //Change  resolution mode to 1280x720p
+   sd_buf2[56]=-16;  //Need to increase DPI to 240
+   }
+    return (hu_aap_enc_send (chan, sd_buf2, sd_buf_len));                // Send Service Discovery Response from sd_buf
   }
   int aa_pro_ctr_a06 (int chan, byte * buf, int len) {                  // Service Discovery Response
     loge ("!!!!!!!!");
@@ -593,8 +639,8 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
       buf [3] = 1;//2;                                                      // Send AUDIO_FOCUS_STATE_GAIN_TRANSIENT
     else
       buf [3] = 1;                                                      // Send AUDIO_FOCUS_STATE_GAIN
-    //buf [4] = 0x10;
-    //buf [5] = 0;                                                      // unsolicited:   0 = false   1 = true
+    buf [4] = 0x10;
+    buf [5] = 0;                                                      // unsolicited:   0 = false   1 = true
     int ret = hu_aap_enc_send (chan, buf, 4);//6);                      // Send Audio Focus Response
     return (0);
   }
@@ -675,12 +721,27 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
 	 // byte rspds [] = {0x80, 0x03, 0x72, 2, 8, 0};                      // Driving Status = 0 = Parked (1 = Moving)
 	
      // hu_aap_enc_send (chan, rspds, sizeof (rspds)); 
-      byte rspds3 [] = {0x80, 0x03, 0x6a, 2, 8, 31};                      // Driving Status = 0 = Parked (1 = Moving)
-      hu_aap_enc_send (chan, rspds3, sizeof (rspds3));           // Send Sensor Notification
-	  ms_sleep (2);//20);
+      // byte rspds3 [] = {0x80, 0x03, 0x6a, 2, 8, 31};                      // Driving Status = 0 = Parked (1 = Moving)
+      // hu_aap_enc_send (chan, rspds3, sizeof (rspds3));           // Send Sensor Notification
+	  // ms_sleep (2);//20);
 	  // byte rspds2 [] = {0x80, 0x03, 0x3a, 2, 8, 1};     This sensor looks to be the passanger sensor (1 has passanger, 0 no passanger) or am I wrong?
 	  byte rspds2 [] = {0x80, 0x03, 0x6a, 2, 8, 0};     
       return (hu_aap_enc_send (chan, rspds2, sizeof (rspds2)));           // Send Sensor Notification
+	   ms_sleep (2);
+	/*  byte rspds [] = {0x80, 0x03, 0x08, 2, 10, 0x80, 0x20, 0x18, 0x00};    
+	   return (hu_aap_enc_send (chan, rspds, sizeof (rspds)));    
+	   
+	   ms_sleep (2);
+	  byte rspds3 [] = {0x80, 0x03, 0x08, 0x00};    
+	   return (hu_aap_enc_send (chan, rspds3, sizeof (rspds3)));    
+	 
+  	 ms_sleep (2);
+	   return (hu_aap_enc_send (chan, rspds, sizeof (rspds)));   
+  	 ms_sleep (2);
+	   return (hu_aap_enc_send (chan, rspds, sizeof (rspds)));   
+  	 ms_sleep (2);
+	 byte rspds4 [] = {0x80, 0x03, 0x08, 2, 10, 2, 0x18, 0x00}; 
+	   return (hu_aap_enc_send (chan, rspds4, sizeof (rspds4)));  */
     }
     return (ret);
   }
@@ -800,7 +861,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
       loge ("Sensor Start Request");
     else
       logd ("Sensor Start Request sensor: %d   period: %d", buf [3], buf [5]);  // R 1 SEN b 00000000 08 01 10 00     Sen: 1, 10, 3, 8, 7
-                                                                                // Yes: SENSOR_TYPE_COMPASS/LOCATION/RPM/DIAGNOSTICS/GEAR      No: SENSOR_TYPE_DRIVING_STATUS
+     // hex_dump("Sensor",64,buf,len);                                                                          // Yes: SENSOR_TYPE_COMPASS/LOCATION/RPM/DIAGNOSTICS/GEAR      No: SENSOR_TYPE_DRIVING_STATUS
     byte rsp [] = {0x80, 0x02, 0x08, 0};
     int ret = hu_aap_enc_send (chan, rsp, sizeof (rsp));                  // Send Sensor Start Response
 //    if (ret)                                                            // If error, done with error
@@ -874,6 +935,14 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 
+// Channel 3 Tou TouchScreen:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, aa_pro_tou_b02, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
 // Channel 1 Sen Sensor:
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -890,13 +959,7 @@ public final class MsgMediaSinkService extends k                        // bd/Ms
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 
-// Channel 3 Tou TouchScreen:
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, aa_pro_tou_b02, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+
 
 // Channel 4 Output Audio:
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -1153,6 +1216,8 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     else
       loge ("No func chan: %d %s  run: %d  num: %d", chan, chan_get (chan), run, num);
 
+        logd ("Function to be run: %d %s  run: %d  num: %d", chan, chan_get (chan), run, num);
+  
     if (log_packet_info) {
       if (chan == AA_CH_VID && (flags == 8 || flags == 0x0a || msg_type == 0)) // || msg_type ==1))
         ;
@@ -1202,7 +1267,7 @@ logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio)
       return (ret);                                                     // Done if error
     }
 	logd("got till here");
-    byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 1};                    // Version Request
+    byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 2};                    // Version Request
     ret = hu_aap_tra_set (0, 3, 1, vr_buf, sizeof (vr_buf));
 	logd("not sure about this?");
     ret = hu_aap_tra_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
