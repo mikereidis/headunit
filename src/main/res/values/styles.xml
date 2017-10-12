@@ -1,0 +1,26 @@
+<resources>
+
+    <!-- Base application theme. -->
+  <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <!-- Customize your theme here. -->
+
+    <item name="android:windowNoTitle">true</item>
+    <item name="android:windowFullscreen">true</item>
+    <item name="android:windowContentOverlay">@null</item>
+  </style>
+    <style name="MyDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
+    <!-- Used for the buttons -->
+    <item name="colorAccent">#FFC107</item>
+    <!-- Used for the title and text -->
+    <item name="android:textColorPrimary">#FFFFFF</item>
+    <!-- Used for the background -->
+    <item name="android:background">#576782</item>
+    </style>
+
+    <!--
+    -->
+<!-- 
+    <item name="windowActionBar">false</item>
+-->
+
+</resources>

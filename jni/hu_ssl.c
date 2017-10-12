@@ -56,6 +56,12 @@
       logd ("ret: %d  ssl_err: %d (Success)", ret, ssl_err);
     else
       loge ("ret: %d  ssl_err: %d (%s)", ret, ssl_err, err_str);
+  
+  logd("printing SSL errors:");
+    long error = ERR_get_error();
+    const char* error_string = ERR_error_string(error, NULL);
+	logd("Error string %s",error_string);
+  logd("Finisehd with SSL errors");
   }
 
 #define HU_USB_ERROR

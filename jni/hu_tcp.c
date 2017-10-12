@@ -1,4 +1,3 @@
-
   //
 
   #define LOGTAG "hu_tcp"
@@ -22,28 +21,17 @@
 
   int   itcp_ep_in          = -1;
   int   itcp_ep_out         = -1;
-  byte my_buffer [1048576] = {0};
 
+
+   // struct sockaddr_in  cli_addr = {0}; - changed on 10.08.2016, this was used in version 1.02
+  struct sockaddr_in  cli_addr;
+  socklen_t cli_len = 0;
+  
   int total_buffer = 0;
   int last_used=0;
   pthread_mutex_t lock;
   pthread_t tid;
-  
-  void *myThreadFun(void *sock)
-{
-	int data_length=0;
-	int fd = *(int *)sock;
-	
-	//logd("in the Thread");
 
-
-    data_length=recv(fd,&my_buffer[total_buffer],131080,MSG_EOR);
-	if (data_length>0)
-		total_buffer += data_length;
-
-	//logd("Successfull read of %d bytes, current counter: %d",data_length,total_buffer);
-
-}
   
   
   char * itcp_error_get (int error) {
@@ -67,56 +55,36 @@
     if (tcp_io_fd < 0)                                                // If TCP IO not ready...
     return (-1);
 	
-	////logd("we need len %d, we got total_buffer: %d ",len,total_buffer);
-	if (tmo==-4) {
-		////logd("We only read the header 6 bytes nothing more");
-	 //ret = recv (tcp_io_fd, buf, len,MSG_EOR);
-	 // if (total_buffer>len+last_used) {
-	 // memcpy(buf,my_buffer+last_used,len);
-	 // last_used=last_used+6;
-	 // // memmove(my_buffer,my_buffer+6,total_buffer-6);
-	 // // total_buffer=total_buffer-6;
-     // return(len); 
-	 // }
-	 // else {
-	int	ret = recv (tcp_io_fd, buf,6,MSG_WAITALL);
-	return(ret);
-	 // }
-		
+	if (tmo == -2)   //Special case we MUST have this bytes before we can crack on!
+	{
+	sock_tmo_set (tcp_io_fd, 2350);
+	int ret = recv (tcp_io_fd, buf, len, MSG_WAITALL );   
+	return (ret);
 	}
+	
+	else if (tmo==-4) {
+	sock_tmo_set (tcp_io_fd, 1350);
+	int	ret = recv (tcp_io_fd, buf,len,MSG_WAITALL);
+	return(ret);
+	}
+	
+	else if (tmo==-6) {
+	sock_tmo_set (tcp_io_fd, 250);
+	int	ret = recv (tcp_io_fd, buf,len,MSG_EOR);
+	//ms_sleep(10);
+	return(ret);
+	}
+	
+
 	
 	else {
-		
-    long ms_tmo = ms_get ();
-    if (tmo > 0)                                                        // If tmo valid...
-     ms_tmo += tmo;                                                    // Timeout time = now + tmo
-	else
-      ms_tmo += 1000;                                                   // Else default 1 second for special case
-
-    int avail = 0;
-    while (tmo == -1 && avail < len ) {            // If tmo == -1 for special "get exactly this many bytes" function
-      avail = recv (tcp_io_fd, buf, len, MSG_PEEK);                     // Peek to see how many bytes are available
-      //logd ("hu_tcp_recv avail: %d  len: %d", avail, len);
-      if (avail < len)                                                  // If we don't have the needed bytes yet...
-        ms_sleep (1);//3);
-    }
-	if (tmo == -2)
-	{
-	avail = recv (tcp_io_fd, buf, len, MSG_WAITALL );   
-	logv ("hu_tcp_recv avail: %d  len: %d", avail, len);
-	return (avail);
-	}
-
-    if (tmo > 0) {
-      sock_tmo_set (tcp_io_fd, tmo);
-    }
-
-    errno = 0;
-    int ret = 0;
-
-	ret = recv (tcp_io_fd, buf, len,MSG_EOR);
-	
-	//ret = recv (tcp_io_fd, buf, len, MSG_WAITALL );   
+		int avail=0;
+	while (avail < len ) {            
+    avail = recv (tcp_io_fd, buf, len, MSG_PEEK);                     // Peek to see how many bytes are available
+	//ms_sleep(1);
+    } 
+	//sock_tmo_set (tcp_io_fd, 250);
+	int ret = recv (tcp_io_fd, buf, len,MSG_EOR);
     return (ret);
 	}
   }
@@ -128,10 +96,24 @@
 
 	
       errno = 0;
-      int ret = send (tcp_io_fd, buf, len, MSG_DONTWAIT);
+      // int ret = send (tcp_io_fd, buf, len, MSG_DONTWAIT);
+      int ret = send (tcp_io_fd, buf, len, MSG_WAITALL);
 	  //logd("Trying to write...   %d",ret);
+	  
       if (ret != len) {             // Write, if can't write full buffer...
-        loge ("Error write  errno: %d (%s)", errno, strerror (errno));
+		  {
+			  loge ("Error write  errno: %d (%s)", errno, strerror (errno));
+			    ret = connect (tcp_so_fd, (const struct sockaddr *) & cli_addr, cli_len);
+				  if (ret != 0) {
+					loge ("Error connect errno: %d (%s) - ipaddress: %ul ", errno, strerror (errno), myip_string);
+					return (-1);
+				  }
+				// ret = send (tcp_io_fd, buf, len, MSG_DONTWAIT);
+				ret = send (tcp_io_fd, buf, len, MSG_WAITALL);
+			 if (ret != len) { 
+			 loge ("Error write  errno: %d (%s)", errno, strerror (errno));
+			 }
+		  }
        // ms_sleep (101);                                                 // Sleep 0.1 second to try to clear errors
 		// int ret = write (tcp_io_fd, buf, len);
       }
@@ -167,9 +149,6 @@
 
 
 
- // struct sockaddr_in  cli_addr = {0}; - changed on 10.08.2016, this was used in version 1.02
-  struct sockaddr_in  cli_addr;
-  socklen_t cli_len = 0;
 
   int itcp_accept (int tmo) {
 
@@ -249,22 +228,16 @@
 
 
 
-    while (tcp_io_fd < 0) {                                             // While we don't have an IO socket file descriptor...
-      itcp_accept (100);                                                // Try to get one with 100 ms timeout
-    }
+   // while (tcp_io_fd < 0) {                                             // While we don't have an IO socket file descriptor...
+      itcp_accept (150);                                                // Try to get one with 100 ms timeout
+   // }
+   if (tcp_io_fd<0)
+	   return(-9);
+   
     logd ("itcp_accept done");
-
     return (0);
   }
- int hu_tcp_start_my_thread() {
-		
-	
-    //logd("Before Thread\n");
-    pthread_create(&tid, NULL, myThreadFun, (void *)&tcp_so_fd);
-	//logd("After Thread\n");
-	sleep(3);
-		
-	}
+
   int hu_tcp_stop () {
     itcp_state = hu_STATE_STOPPIN;
     //logd ("  SET: itcp_state: %d (%s)", itcp_state, state_get (itcp_state));
@@ -297,7 +270,7 @@
       itcp_deinit ();
       itcp_state = hu_STATE_STOPPED;
       logd ("  SET: itcp_state: %d (%s)", itcp_state, state_get (itcp_state));
-      return (-1);
+      return (ret);
     }
     logd ("OK itcp_init");
 
@@ -305,4 +278,4 @@
     logd ("  SET: itcp_state: %d (%s)", itcp_state, state_get (itcp_state));
     return (0);
   }
-
+  

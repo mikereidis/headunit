@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="gb.xxy.hr"
+  android:versionCode="44"
+  android:versionName="Headunit Reloaded V3.0.2">
+
+  <uses-feature android:name="android.hardware.usb.host"          android:required="false"/>
+  <uses-feature android:name="android.hardware.screen.landscape"  android:required="false"/>
+  <uses-feature android:name="android.hardware.wifi"              android:required="false"/>
+
+  <uses-sdk
+    android:minSdkVersion="16"
+  />
+
+
+
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+<uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.BROADCAST_STICKY"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+	 <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
+
+  <application android:label="Headunit Reloaded"
+    android:icon="@drawable/hu_icon_256"
+    android:hardwareAccelerated="true"
+	android:persistent="true">
+
+
+    <activity android:name=".hu_act"
+      android:label="Headunit Reloaded"
+      android:launchMode="singleInstance"
+	  android:configChanges="orientation|screenSize|uiMode|screenLayout|layoutDirection|smallestScreenSize|density|touchscreen|navigation|keyboard|keyboardHidden|fontScale"
+      android:screenOrientation="sensorLandscape"
+      android:hardwareAccelerated="true"
+      android:resizeableActivity="false"
+android:theme="@style/AppTheme" 
+      >
+
+
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+		<category android:name="android.intent.category.DEFAULT"/>
+          <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+
+    </intent-filter>
+    <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/usb_device_filter" />
+
+
+    </activity>
+	  <activity android:name=".Wifip2plaunch" android:label="WifiDirect"
+        android:screenOrientation="landscape">
+	 </activity>
+<activity android:name=".hu_pref" android:label="Settings"
+        android:screenOrientation="landscape">
+	 </activity>
+
+      <activity android:name=".player"
+      android:label="Player Screen"
+      android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+          android:launchMode="singleInstance"
+          android:configChanges="orientation|screenSize|uiMode|screenLayout|layoutDirection|smallestScreenSize|density|touchscreen|navigation|keyboard|keyboardHidden|fontScale"
+          android:screenOrientation="sensorLandscape"
+          android:hardwareAccelerated="true"
+          android:resizeableActivity="false"
+      android:noHistory="true"
+      >
+      </activity>
+
+      <activity android:name=".self_player"
+          android:label="Player Screen"
+          android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+          android:launchMode="singleInstance"
+          android:configChanges="orientation|screenSize|uiMode|screenLayout|layoutDirection|smallestScreenSize|density|touchscreen|navigation|keyboard|keyboardHidden|fontScale"
+          android:screenOrientation="sensorLandscape"
+          android:hardwareAccelerated="true"
+          android:resizeableActivity="false"
+          android:noHistory="true"
+          >
+      </activity>
+
+      <receiver  android:name=".WifiReceiver" android:exported="true">
+          <intent-filter>
+              <action android:name="android.net.wifi.STATE_CHANGE" />
+              <action android:name="android.intent.action.BOOT_COMPLETED" />
+              <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+          </intent-filter>
+      </receiver>
+
+      <service android:name=".new_hu_tra" android:exported="false"></service>
+
+      <provider
+          android:name=".GenericFileProvider"
+          android:authorities="${applicationId}.gb.xxy.hr"
+          android:exported="false"
+          android:grantUriPermissions="true">
+          <meta-data
+              android:name="android.support.FILE_PROVIDER_PATHS"
+              android:resource="@xml/provider_paths"/>
+      </provider>
+
+  </application>
+</manifest>
+<!-- 
+-->
+

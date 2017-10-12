@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <!-- Match all devices -->
+    <!--
+        <usb-device />
+    -->
+
+    <!-- Android USB accessory: accessory
+    -->
+    <usb-device vendor-id="16601" product-id="11520" />
+
+    <!-- Android USB accessory: accessory + adb
+    -->
+    <usb-device vendor-id="16601" product-id="11521" />
+    <usb-device vendor-id="6353" />
+    <usb-device vendor-id="32903" />
+    <usb-device vendor-id="2996" />
+    <usb-device vendor-id="1256" />
+    <usb-device vendor-id="8888" />
+    <usb-device vendor-id="4100" />
+    <usb-device vendor-id="4817" />
+    <usb-device vendor-id="1282" />
+    <usb-device vendor-id="4046" />
+    <usb-device vendor-id="1161" />
+    <usb-device vendor-id="16700" />
+    <usb-device vendor-id="2389" />
+    <usb-device vendor-id="2334" />
+    <usb-device vendor-id="1245" />
+    <usb-device vendor-id="6610" />
+    <usb-device vendor-id="1154" />
+    <usb-device vendor-id="4265" />
+    <usb-device vendor-id="1478" />
+    <usb-device vendor-id="8791" />
+    <usb-device vendor-id="1033" />
+    <usb-device vendor-id="1242" />
+    <usb-device vendor-id="2352" />
+    <usb-device vendor-id="8019" />
+    <usb-device vendor-id="8470" />
+    <usb-device vendor-id="2821" />
+    <usb-device vendor-id="1137" />
+    <usb-device vendor-id="1105" />
+    <usb-device vendor-id="3868" />
+    <usb-device vendor-id="1044" />
+    <usb-device vendor-id="9248" />
+    <usb-device vendor-id="4633" />
+    <usb-device vendor-id="7099" />
+    <usb-device vendor-id="8198" />
+    <usb-device vendor-id="6127" />
+    <usb-device vendor-id="57408" />
+    <usb-device vendor-id="9443" />
+    <usb-device vendor-id="7501" />
+    <usb-device vendor-id="3705" />
+    <usb-device vendor-id="5730" />
+    <usb-device vendor-id="1221" />
+    <usb-device vendor-id="9699" />
+    <usb-device vendor-id="1032" />
+    <usb-device vendor-id="8980" />
+    <usb-device vendor-id="1356" />
+    <usb-device vendor-id="6473" />
+    <usb-device vendor-id="7871" />
+    <usb-device vendor-id="8759" />
+    <usb-device vendor-id="9024" />
+    <usb-device vendor-id="5845" />
+    <usb-device vendor-id="6565" />
+    <usb-device vendor-id="8921" />
+    <usb-device vendor-id="10007" />
+    <usb-device vendor-id="6609" />
+    <usb-device vendor-id="10294" />
+    <usb-device vendor-id="8222" />
+    <usb-device vendor-id="4251" />
+    <usb-device vendor-id="3725" />
+    <usb-device vendor-id="8320" />
+    <usb-device vendor-id="7493" />
+    <usb-device vendor-id="1020" />
+    <usb-device vendor-id="10864" />
+
+</resources>

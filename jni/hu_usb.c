@@ -272,12 +272,12 @@ if (ms_duration > 400)
     return (total_bytes_xfrd);
   }
 
-  int hu_usb_recv (byte * buf, int len, int tmo) {
+  int old_hu_usb_recv (byte * buf, int len, int tmo) {
     int ret = iusb_bulk_transfer (iusb_ep_in, buf, len, tmo);       // milli-second timeout
     return (ret);
   }
 
-  int hu_usb_send (byte * buf, int len, int tmo) {
+  int old_hu_usb_send (byte * buf, int len, int tmo) {
     int ret = iusb_bulk_transfer (iusb_ep_out, buf, len, tmo);      // milli-second timeout
     return (ret);
   }
@@ -495,14 +495,7 @@ if (ms_duration > 400)
 
     //usb_perms_set ();                                                 // Setup USB permissions, where needed
 
-    if ((ep_in_addr == 255 && ep_out_addr == 0) || file_get ("/sdcard/hu_disable_selinux_chmod_bus")) {    // 
-                                                                        // Disable SELinux and open /dev/bus permissions for SUsb
-      int ret = system ("su -c \"setenforce 0 ; chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null\""); // !! Binaries like ssd that write to stdout cause C system() to crash !
-      logd ("iusb_usb_init system() w/ su ret: %d", ret);
 
-      ret = system ("chmod -R 777 /dev/bus 1>/dev/null 2>/dev/null"); // !! Binaries like ssd that write to stdout cause C system() to crash !
-      logd ("iusb_usb_init system() no su ret: %d", ret);
-    }
 
 
     usb_err = libusb_open (iusb_best_device, & iusb_dev_hndl);

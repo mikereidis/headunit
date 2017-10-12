@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+
+          <TableLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+          android:id="@+id/tv_log"
+          android:visibility="visible"
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+		  android:paddingTop="10dp"
+		  android:paddingBottom="10dp"
+		  android:paddingLeft="5dp"
+		  android:paddingRight="5dp"
+         >
+         
+		 <TableRow 
+        android:layout_weight="1"
+        android:gravity="center">
+        <ImageButton android:id="@+id/imageButton1" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/self" android:padding="10dp" />
+        <ImageButton android:id="@+id/imageButton2" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/wifi" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton3" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/wifi_direct" android:padding="10dp"/>
+		</TableRow>
+
+				 <TableRow 
+        android:layout_weight="1"
+        android:gravity="center">
+        <ImageButton android:id="@+id/imageButton4" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/help" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton5" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/settings" android:padding="10dp"/>
+        <ImageButton android:id="@+id/imageButton6" android:layout_width="0dp" android:adjustViewBounds="true" android:scaleType="fitCenter"   android:background="?android:selectableItemBackground" android:layout_weight="1" android:layout_height="match_parent"  android:src="@drawable/exit" android:padding="10dp"/>
+		</TableRow>
+
+        </TableLayout>
+            
+

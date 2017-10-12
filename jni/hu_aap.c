@@ -5,14 +5,15 @@
   #include "hu_uti.h"
   #include "hu_ssl.h"
   #include "hu_aap.h"
-#ifndef NDEBUG
-  #include "hu_aad.h"
-#endif
 
   int iaap_state = 0; // 0: Initial    1: Startin    2: Started    3: Stoppin    4: Stopped
   int use_audio=1;
   int hires=0;
   int first_run=1;
+  char * new_sdbuf;
+  int new_buf_length=0;
+  
+  byte bluetooth_mac [17] = {0};      //This needs to be re-enabled for built in devices.
  
   
   char * chan_get (int chan) {
@@ -25,12 +26,13 @@
       case AA_CH_AUD: return ("AUD");
       case AA_CH_AU1: return ("AU1");
       case AA_CH_AU2: return ("AU2");
+      case AA_CH_MED: return ("MED");
+      case AA_CH_NAV: return ("NAV");
     }
     return ("UNK");
   }
-#include "hu_usb.h"
 #include "hu_tcp.h"
-  int transport_type = 1; // 1=USB 2=WiFi
+  int transport_type = 1; // 1=USB 2=WiFi 3=OLD USB
   int ihu_tra_recv  (byte * buf, int len, int tmo) {
     if (transport_type == 1)
 	{
@@ -42,6 +44,8 @@
 	}
     else if (transport_type == 2)
       return (hu_tcp_recv  (buf, len, tmo));
+    else if (transport_type == 3)
+      return (old_hu_usb_recv(buf,len,tmo));
     else
       return (-1);
   }
@@ -50,12 +54,14 @@
       return (hu_usb_send  (buf, len, tmo));
     else if (transport_type == 2)
       return (hu_tcp_send  (buf, len, tmo));
+    else if (transport_type == 3)
+      return (old_hu_usb_send(buf,len,tmo));
     else
       return (-1);
   }
   int ihu_tra_stop  () {
-    if (transport_type == 1)
-      return (hu_usb_stop  ());
+    if (transport_type == 1 || transport_type==3)
+      return (-1);
     else if (transport_type == 2)
       return (hu_tcp_stop  ());
     else
@@ -66,47 +72,39 @@
   int iaap_tra_recv_tmo = 150;//100;//1;//10;//100;//250;//100;//250;//100;//25; // 10 doesn't work ? 100 does
   int iaap_tra_send_tmo = 250;//2;//25;//250;//500;//100;//500;//250;
 
-  int ihu_tra_start (byte ep_in_addr, byte ep_out_addr, long myip_string, int transport_audio,int hr) {
+  int ihu_tra_start (byte ep_in_addr, byte ep_out_addr, byte con_mod_use, long myip_string, int transport_audio,int hr) {
 	  logd("The audio transport should be now %d",transport_audio);
+	  logd("This is the bew version with buffer / then decode...");
 	  use_audio=transport_audio;
 	  hires=hr;
-	  
-	int my_mode = 0;
+
+
     if (ep_in_addr == 255 && ep_out_addr == 255) {
       logd ("AA Wifi Direct");
       transport_type = 2;       // WiFi
       iaap_tra_recv_tmo = 150;
       iaap_tra_send_tmo = 250;
-	  my_mode=2;
     }
-	
-	else if (ep_in_addr == 255 && ep_out_addr == 1) {
-	  ep_out_addr=255;
-      logd ("AA Self Mode");
-      transport_type = 2;       // Self
-      iaap_tra_recv_tmo = 150;
-      iaap_tra_send_tmo = 250;
-	  my_mode=3;
-    }
-	else if (ep_in_addr == 255 && ep_out_addr == 2) {
-	  ep_out_addr=255;
-      logd ("AA Wifi");
-      transport_type = 2;       // WiFi
-      iaap_tra_recv_tmo = 150;
-      iaap_tra_send_tmo = 250;
-	  my_mode=4;
-    }
-	 
-    else {
+ 
+    else if (con_mod_use == 255) {
       transport_type = 1;       // USB
       logd ("AA over USB");
       iaap_tra_recv_tmo = 150;//100;
       iaap_tra_send_tmo = 250;
     }
+    else
+     {
+      transport_type = 3;       // USB
+      logd ("AA over USB using C library.");
+      iaap_tra_recv_tmo = 150;//100;
+      iaap_tra_send_tmo = 250;
+     }
     if (transport_type == 1)
-      return (hu_usb_start  (ep_in_addr, ep_out_addr,myip_string));
+      return (0);
     else if (transport_type == 2)
-		return (hu_tcp_start  (ep_in_addr, ep_out_addr, myip_string));
+      return (hu_tcp_start  (ep_in_addr, ep_out_addr, myip_string));
+    else if (transport_type == 3)
+      return (hu_usb_start  (ep_in_addr, ep_out_addr));
 	 else
       return (-1);
   }
@@ -120,14 +118,25 @@
   int assy_size = 0;                                                    // Current size
   int max_assy_size = 0;                                                // Max observed size needed:  151,000
 
+  byte media_assy [65536] = {0};                                         // Global assembly buffer for video fragments: Up to 1 megabyte   ; 128K is fine for now at 800*640
+  int media_assy_size = 0;                                                    // Current size
+ 
+
+  
   int vid_rec_ena = 0;                                                // Video recording to file
   int vid_rec_fd  = -1;
 
-  byte vid_ack [] = {0x80, 0x04, 0x08, 0, 0x10,  1};                    // Global Ack: 0, 1
+  byte vid_ack [] = {0x80, 0x04, 0x08, -1, 0x10,  1};                    // Global Ack: 0, 1
 
+ 
   byte  rx_buf [DEFBUF] = {0};                                          // Global Transport Rx buf
-  //byte dec_buf [DEFBUF] = {0};                                          // Global decrypted receive buffer
-  #define dec_buf rx_buf                          // Use same buffer !!!
+  byte global_data[rxbuffsize] = {0};									//1Mb Rx Read Buffer
+  int global_position = 0;											//Pointer of the Rx Buffer
+  
+  
+  
+                                           // Global decrypted receive buffer
+ // #define dec_buf rx_buf                          // Use same buffer !!!
 
 
 
@@ -152,11 +161,11 @@
       return (-1);
     }
     ret = ihu_tra_recv (buf, len, tmo);
-   /* if (ret < 0) {
-      loge ("ihu_tra_recv() error so stop Transport & AAP  ret: %d", ret);
-      hu_aap_stop (); 
-    }
-    return (ret);*/
+	 if (transport_type == 1 && ret<0)
+	 { 
+		hu_aap_stop (); 
+	    return (ret);
+	 }
   }
 
   int log_packet_info = 1;
@@ -241,224 +250,52 @@
   }
 
 
-//OLD INITIALITAZION SEQUENCE KEEP IT HERE JUST FOR DATA ABOUT SENSORS, OTHERWISE NOT IN USE!
-/*  byte sd_buf [] = {0, 6,        //8, 0};                                            // Svc Disc Rsp = 6
-/*
-cq  (co[  (str  (str  (str  (str  (int  (str  (str  (str  (str  (boo  (boo    MsgServiceDiscoveryResponse
-
-  co  int (cm (bd (ak (bi (m  (ce (bq (bb (cb (av (cy (ad       co[] a()      MsgAllServices
-
-    cm  (cn[                                                                  MsgSensors
-      cn  int                                                   cn[] a()      MsgSensorSourceService  Fix name to MsgSensor
-
-    bd  (int  (int  (f[ (cz[  (boo                                            MsgMediaSinkService
-       f  int   int   int                                        f[] a()      MsgAudCfg   See same below
-      cz  (int  (int  (int  (int  (int  (int                    cz[] a()      MsgVidCfg
-
-    ak  (int[ (am[  (al[                                                      MsgInputSourceService   int[] = keycodes    Graphics Points ?
-      am  int   int                                             am[] a()      TouchScreen width, height
-      al  int   int                                             al[] a()      TouchPad    width, height
-
-Audio Config:
-  sampleRate
-  channelConfig
-  audioFormat
-
-public final class MsgMediaSinkService extends k                        // bd/MsgMediaSinkService extends k/com.google.protobuf.nano.MessageNano
-{
-  public int      a                 = 0;                                // a
-  public int      mCodecType        = 1;                                // b
-  public int      mAudioStreamType  = 1;                                // c
-  public f[]      mAudioStreams     = f.a();                            // f[]:d    a:samplingRate    b:numBits     c:channels
-  public cz[]     mCodecs           = cz.a();                           // cz[]:e   b:codecResolution 1=800x480 2=1280x720 3=1920x1080
-                                                                                //  c:0/1 for 30/60 fps   d:widthMargin e:heightMargin f:density/fps g: ?
-  private boolean f                 = false;                            // f
-
-
-// D/CAR.GAL ( 3804): Service id=1 type=MediaSinkService { codec type=1 { codecResolution=1 widthMargin=0 heightMargin=0 density=30}}
-
-            // CH 1 Sensors:                      //cq/co[]
-//*
-                         0x0A, 4*4+4,//co: int, cm/cn[]
-                                       0x08, AA_CH_SEN,
-									 // 0x22, 0x0B, 0x0A, 0x01, 0x54, 0x12, 0x06, 0x08, 0xA0, 0x06, 0x10, 0xE0, 0x03,
-									 //0x0A, 0x10, 0x08, 0x02, 0x12, 0x0C, 0x0A, 0x02, 0x08, 0x01, 0x0A, 0x02, 0x08, 0x0A, 0x0A, 0x02, 0x08, 0x0D,
-                                       0x12, 4*4,
-                                                           0x0A, 2,
-                                                                     0x08, 1, // SENSOR_TYPE_DRIVING_STATUS 12
-                                                           0x0A, 2,
-                                                                     0x08, 3, // SENSOR_TYPE_DRIVING_STATUS 12
-
-														   0x0A, 2,
-                                                                     0x08, 10, // SENSOR_TYPE_DRIVING_STATUS 12
-														   0x0A, 2,
-                                                                     0x08, 11, // SENSOR_TYPE_NIGHT_DATA 10
-																	
-
-//*/
-/*  Requested Sensors: 10, 9, 2, 7, 6:
-                        0x0A, 4 + 4*6,     //co: int, cm/cn[]
-                                      0x08, AA_CH_SEN,  0x12, 4*6,
-				USED BY DHU: 0A 01 54 12 
-				06 08 A0 06 10 E0 03 0A
-                                                          0x0A, 2,
-                                                                    0x08, 11, // SENSOR_TYPE_DRIVING_STATUS 12
-                                                          0x0A, 2,
-                                                                    0x08,  3, // SENSOR_TYPE_RPM            2
-                                                          0x0A, 2,
-                                                                    0x08,  8, // SENSOR_TYPE_DIAGNOSTICS    7
-                                                          0x0A, 2,
-                                                                    0x08,  7, // SENSOR_TYPE_GEAR           6
-                                                          0x0A, 2,
-                                                                    0x08,  1, // SENSOR_TYPE_COMPASS       10
-                                                          0x0A, 2,
-                                                                    0x08, 10, // SENSOR_TYPE_LOCATION       9
-//
-//*
-            // CH 2 Video Sink:
-                        0x0A, 4+4+11, 0x08, AA_CH_VID,
-//800f
-                                      0x1A, 4+11, // Sink: Video
-                                                  0x08, 3,    // int (codec type) 3 = Video
-                                                  //0x10, 1,    // int (audio stream type)
-//                                                  0x1a, 8,    // f        //I44100 = 0xAC44 = 10    10 1  100 0   100 0100  :  -60, -40, 2
-                                                                            // 48000 = 0xBB80 = 10    111 0111   000 0000     :  -128, -9, 2
-                                                                            // 16000 = 0x3E80 = 11 1110 1   000 0000          :  -128, -3
-
-                                                  0x22, 11,   // cz                                                               // Res        FPS, WidMar, HeiMar, DPI
-                                                              // DPIs:    (FPS doesn't matter ?)
-                                                              0x08, 1, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     //  800x 480, 30 fps, 0, 0, 160 dpi    0xa0 // Default 160 like 4100NEX
-																   //0x30, 0,     // 1280x 720, 30 fps, 0, 0, 160 dpi    0xa0
-                                                           
-                                                            //0x08, 1, 0x10, 1, 0x18, 0, 0x20, 0, 0x28, -128, 1,   //0x30, 0,     //  800x 480, 30 fps, 0, 0, 128 dpi    0x80 // 160-> 128 Small, phone/music close to outside
-                                                            //0x08, 1, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -16, 1,   //0x30, 0,     //  800x 480, 30 fps, 0, 0, 240 dpi    0xf0 // 160-> 240 Big, phone/music close to center
-
-                                                            // 60 FPS makes little difference:
-                                                            //0x08, 1, 0x10, 2, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     //  800x 480, 60 fps, 0, 0, 160 dpi    0xa0
-
-                                                            // Higher resolutions don't seem to work as of June 10, 2015 release of AA:
-												 //0x22, 11,			
-                                                            //0x08, 2, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     // 1280x 720, 30 fps, 0, 0, 160 dpi    0xa0
-                                                            //0x08, 3, 0x10, 1, 0x18, 0, 0x20, 0, 0x28,  -96, 1,   //0x30, 0,     // 1920x1080, 30 fps, 0, 0, 160 dpi    0xa0
-//*
-//* Crashes on null Point reference without:
-            // CH 3 TouchScreen/Input:
-                        0x0A, 4+2+6,//+2+16,
-                                        0x08, AA_CH_TOU,
-//                                                              0x08, -128, -9, 2,    0x10, 16,   0x18, 2,
-                                                  //0x28, 0, //1,   boolean
-                                        0x22, 2+6,//+2+16, // ak  Input
-                                                  //0x0a, 16,   0x03, 0x54, 0x55, 0x56, 0x57, 0x58, 0x7e, 0x7f,   -47, 1,   -127, -128, 4,    -124, -128, 4,
-                                                  0x12,  6,        // no int[], am      // 800 = 0x0320 = 11 0    010 0000 : 32+128(-96), 6
-                                                                      // 480 = 0x01e0 = 1 1     110 0000 =  96+128 (-32), 3
-                                                              0x08, -96,   6,    0x10, -32, 3,        //  800x 480
-                                                            //0x08, -128, 10,    0x10, -48, 5,        // 1280x 720     0x80, 0x0a   0xd0, 5
-                                                            //0x08, -128, 15,    0x10, -72, 8,        // 1920x1080     0x80, 0x0f   0xb8, 8
-//*
-//*
-            // CH 7 Microphone Audio Source:
-                        0x0A, 4+4+7,   0x08, AA_CH_MIC,
-                                       0x2A, 4+7,   // Source: Microphone Audio
-                                                  0x08, 1,    // int (codec type) 1 = Audio
-                                                  0x12, 7,    // AudCfg   16000hz         16bits        1chan
-                                                              //0x08, 0x80, 0x7d,         0x10, 0x10,   0x18, 1,
-                                                                0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
-//*/
-/*
-                        0x0A, 4+4+7+1, 0x08, AA_CH_MIC,
-                                       0x2A, 4+7+1, // Source: Microphone Audio
-                                                  0x08, 1,    // int (codec type) 1 = Audio
-                                                  0x12, 8,    // AudCfg   48000hz         16bits        2chan
-                                                                //0x08, 0x80, 0xF7, 0x02,   0x10, 0x10,   0x18, 02,
-                                                                0x08, -128,   -9, 0x02,   0x10, 0x10,   0x18, 02,
-//*/
-/*
-                // MediaPlaybackService:
-                        0x0A, 4,     0x08, 6,
-                                     0x4a, 0,
-//*
-//*
-                        0x12, 4, 'E', 'm', 'i', 'l',//1, 'A', // Car Manuf          Part of "remembered car"
-                        0x1A, 4, 'A', 'l', 'b', 'e',//1, 'B', // Car Model
-                        0x22, 4, '2', '0', '1', '6',//1, 'C', // Car Year           Part of "remembered car"
-                        0x2A, 4, '0', '0', '0', '1',//1, 'D', // Car Serial     Not Part of "remembered car" ??     (vehicleId=null)
-                        0x30, 0,//0,      // driverPosition
-                        0x3A, 4, 'E', 'm', 'i', 'l',//1, 'E', // HU  Make / Manuf
-                        0x42, 4, 'H', 'U', '1', '5',//1, 'F', // HU  Model
-                        0x4A, 4, 'S', 'W', 'B', '1',//1, 'G', // HU  SoftwareBuild
-                        0x52, 4, 'S', 'W', 'V', '1',//1, 'H', // HU  SoftwareVersion
-                        0x58, 0,//1,//1,//0,//1,       // ? bool (or int )    canPlayNativeMediaDuringVr
-                        0x60, 0,//1,//0,//0,//1        // mHideProjectedClock     1 = True = Hide
-                        //0x68, 1,
-//*
-
-// 04-22 03:43:38.049 D/CAR.SERVICE( 4306): onCarInfo com.google.android.gms.car.CarInfoInternal[dbId=0,manufacturer=A,model=B,headUnitProtocolVersion=1.1,modelYear=C,vehicleId=null,
-// bluetoothAllowed=false,hideProjectedClock=false,driverPosition=0,headUnitMake=E,headUnitModel=F,headUnitSoftwareBuild=G,headUnitSoftwareVersion=H,canPlayNativeMediaDuringVr=false]
-
-
-//*
-            // CH 4 Output Audio Sink:
-                        0x0A, 4+6+8, 0x08, AA_CH_AUD,
-                                     0x1A, 6+8, // Sink: Output Audio
-                                                  0x08, 1,    // int (codec type) 1 = Audio
-                                                  0x10, 3,    // Audio Stream Type = 3 = MEDIA
-                                                  0x1A, 8,    // AudCfg   48000hz         16bits        2chan
-                                                              //0x08, 0x80, 0xF7, 0x02,   0x18, 0x10,   0x18, 02,
-                                                                0x08, -128,   -9, 0x02,   0x10, 0x10,   0x18, 02,
-//*
-//*
-            // CH 5 Output Audio Sink1:
-                        0x0A, 4+6+7, 0x08, AA_CH_AU1,
-                                     0x1A, 6+7, // Sink: Output Audio
-                                                  0x08, 1,    // int (codec type) 1 = Audio
-                                                  0x10, 1,    // Audio Stream Type = 1 = TTS
-                                                  0x1A, 7,    // AudCfg   16000hz         16bits        1chan
-                                                              //0x08, 0x80, 0x7d,         0x10, 0x10,   0x18, 1,
-                                                                0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
-//*
-////*
-            // CH 6 Output Audio Sink2:
-                        0x0A, 4+6+7, 0x08, AA_CH_AU2,
-                                     0x1A, 6+7, // Sink: Output Audio
-                                                  0x08, 1,    // int (codec type) 1 = Audio
-                                                  0x10, 2,    // Audio Stream Type = 2 = SYSTEM
-                                                  0x1A, 7,    // AudCfg   16000hz         16bits        1chan
-                                                              //0x08, 0x80, 0x7d,         0x10, 0x10,   0x18, 1,
-                                                                0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
-//*
-
-    };
-*/
 
 byte sd_buf2 []={0x00, 0x06, 
 //Touch+input CHANNEL
-0x0A, 0x0F, 0x08, 0x01, 0x22, 0x0B, 0x0A, 0x01, 0x54, 0x12, 0x06, 0x08, 0xA0, 0x06, 0x10, 0xE0, 0x03, 
+0x0A, 34,   0x08, 0x01, 0x22, 30, 0x0A, 20, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x12, 0x06, 0x08, 0x80, 0x0f, 0x10, 0xb8, 0x08,
+//0x0A, 0x0F, 0x08, 0x01, 0x22, 0x0B, 0x0A, 0x01, 0x54, 0x12, 0x06, 0x08, 0xA0, 0x06, 0x10, 0xE0, 0x03, 
+//0x0a, 0x12, 0x08, 0x01, 0x22, 0x0e, 0x0a, 0x0c, 0x01, 0x02, 0x04, 0x13, 0x14, 0x15, 0x16, 0x17, 0x54, 0x80, 0x80, 0x04,
 
 // SENSOR CHANNEL
-0x0A, 0x10, 0x08, 0x02, 0x12, 0x0C, 0x0A, 0x02, 0x08, 0x01, 0x0A, 0x02, 0x08, 0x0A, 0x0A, 0x02, 0x08, 0x0D,
+0x0A, 16, 0x08, 0x02, 0x12, 12, 0x0A, 0x02, 0x08, 0x01, 0x0A, 0x02, 0x08, 0x0A, 0x0A, 0x02, 0x08, 13, 
 //                       18,  12,     10,    2,    8,    1,  10,   2,     8,    10, 10,    2,    8,    13
+//General Notification channel currently not working I might be doing something wrong...
+//0x0a, 4,     0x08, 13,0x6A,0,
 
 
 // Video CHANNEL
 0x0A, 0x15, 0x08, 0x03, 0x1A, 0x11, 0x08, 0x03, 0x22, 0x0D, 0x08, 0x01, 0x10, 0x02, 0x18, 0x00, 0x20, 0x00, 0x28, -96, 0x01, 0x30, 0x00, 
 // MIC CHANNEL
 0x0A, 4+4+7,0x08, AA_CH_MIC, 0x2A, 4+7, 0x08, 1,    0x12, 7,    0x08, -128, 0x7d, 0x10, 0x10, 0x18, 1,
+//0x0A, 29,   0x08,     8,      0x32, 25, 0x0A, 17, '0','0',':','0','0',':','0','0',':','0','0',':','0','0',':','0','0',0x12,1,4,0x1A,1,1,
+//MediaPlaybackService?????
+0x0a, 6, 0x08, 9,0x4A,2,0x08,01,
+//Navigation Status Service (below code looks to be working, we are receiveing 2 messags, 8004 and 8005, 8005 is probably next turn distance/time and 8004 is the graphical part, inc street name...
+0x0a, 17, 0x08,10,0x42,0x0d,0x08,-84,0x02,0x10,0x01,0x1a,0x06,0x08,0x40,0x10,0x40,0x18,0x10,
+//0x0a, 6, 0x08,10,0x42,2,0x08,01,
+//0x0a, 6, 0x08, 9,0x7A,2,0x08,01,
+
+
 // CAR DEFINITION
 						
-                        0x12, 4, 'E', 'm', 'i', 'l',//1, 'A', // Car Manuf          Part of "remembered car"
-                        0x1A, 4, 'A', 'l', 'b', 'e',//1, 'B', // Car Model
-                        0x22, 4, '2', '0', '1', '6',//1, 'C', // Car Year           Part of "remembered car"
+                        0x12, 0, //'H','e','a','d','u','n','i','t',//1, 'A', // Car Manuf          Part of "remembered car"
+                        0x1A, 8, 'R','e','l','o','a','d','e','d',//1, 'B', // Car Model
+                        0x22, 4, '2', '0', '1', '7',//1, 'C', // Car Year           Part of "remembered car"
                         0x2A, 4, '0', '0', '0', '1',//1, 'D', // Car Serial     Not Part of "remembered car" ??     (vehicleId=null)
                         0x30, 0,//0,      // driverPosition
 						
-                        0x3A, 4, 'E', 'm', 'i', 'l',//1, 'E', // HU  Make / Manuf
+                        0x3A, 8, 'H','e','a','d','u','n','i','t',//1, 'E', // HU  Make / Manuf
                         0x42, 4, 'H', 'U', '1', '5',//1, 'F', // HU  Model
                         0x4A, 4, 'S', 'W', 'B', '1',//1, 'G', // HU  SoftwareBuild
                         0x52, 4, 'S', 'W', 'V', '1',//1, 'H', // HU  SoftwareVersion
-                        0x58, 0,//1,//1,//0,//1,       // ? bool (or int )    canPlayNativeMediaDuringVr
+                        0x58, 1,//1,//1,//0,//1,       // ? bool (or int )    canPlayNativeMediaDuringVr
                         0x60, 0,//1,//0,//0,//1        // mHideProjectedClock     1 = True = Hide	*/	
 						
 //THE LAST 3 CHANNEL KEEP THEM HERE SO WE CAN EXCLUDE THEM IF NEED BE.
+//WifiProjectionService (Phone BSSID????)
+//0x0a, 4+16,     0x08, 10,0x72,16,0x0A,'H','e','a','d','u','n','i','t',' ','R','e','l','o','a','d',
+
 0x0A, 4+6+7, 0x08, AA_CH_AU2, 0x1A, 6+7, 0x08, 1,  0x10, 2, 0x1A, 7, 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
 0x0A, 4+6+7, 0x08, AA_CH_AU1, 0x1A, 6+7, 0x08, 1,  0x10, 1, 0x1A, 7, 0x08, -128, 0x7d,         0x10, 0x10,   0x18, 1,
 0x0A, 4+6+8, 0x08, AA_CH_AUD, 0x1A, 6+8, 0x08, 1,  0x10, 3, 0x1A, 8, 0x08, -128,   -9, 0x02,   0x10, 0x10,   0x18, 02,
@@ -487,15 +324,26 @@ byte sd_buf2 []={0x00, 0x06,
     return (-1);
   }
 
-  extern int wifi_direct;// = 0;//1;//0;
+
   int aa_pro_ctr_a05 (int chan, byte * buf, int len) {                  // Service Discovery Request
     if (len < 4 || buf [2] != 0x0a)
       loge ("Service Discovery Request: %x", buf [2]);
     else
       logd ("Service Discovery Request");                               // S 0 CTR b src: HU  lft:   113  msg_type:     6 Service Discovery Response    S 0 CTR b 00000000 0a 08 08 01 12 04 0a 02 08 0b 0a 13 08 02 1a 0f
 
+	logd("The new buf size should be: %d",new_buf_length);
     // int sd_buf_len = sizeof (sd_buf);
-    int sd_buf_len = sizeof (sd_buf2);
+    //int sd_buf_len = sizeof (sd_buf2);
+    int sd_buf_len = new_buf_length;
+	byte updated_sdbuf [new_buf_length];
+	int idx=0;
+	for (idx=0;idx<new_buf_length;idx++)
+	{
+		updated_sdbuf[idx]=new_sdbuf[idx];
+	}
+	//strncpy(updated_sdbuf,new_sdbuf,new_buf_length);
+	hex_dump ("New SD BUF: ", new_buf_length, updated_sdbuf, new_buf_length);
+	hex_dump ("SD BUF2: ",  sizeof(sd_buf2), sd_buf2, sizeof(sd_buf2));
    logd("hu_app_start, use_audio value is reported as %d!",use_audio);
    if (use_audio<1)
    {
@@ -504,10 +352,15 @@ byte sd_buf2 []={0x00, 0x06,
    }
    if (hires==1)
    {  
-   sd_buf2[48]=2; //Change  resolution mode to 1280x720p
-   sd_buf2[56]=-16;  //Need to increase DPI to 240
+   updated_sdbuf[67]=2; //Change  resolution mode to 1280x720p
+   updated_sdbuf[75]=-16;  //Need to increase DPI to 240
    }
-    return (hu_aap_enc_send (chan, sd_buf2, sd_buf_len));                // Send Service Discovery Response from sd_buf
+  // memcpy(& sd_buf2[97],bluetooth_mac,17);
+//	hex_dump ("BluetoothMac: ", 32, bluetooth_mac, 17);
+   //hex_dump (" W/    hu_aap_enc_send: ", 256, sd_buf2, sd_buf_len);
+   
+    return (hu_aap_enc_send (chan, updated_sdbuf, sd_buf_len));                // Send Service Discovery Response from sd_buf
+    //return (hu_aap_enc_send (chan, sd_buf2, sd_buf_len));                // Send Service Discovery Response from sd_buf
   }
   int aa_pro_ctr_a06 (int chan, byte * buf, int len) {                  // Service Discovery Response
     loge ("!!!!!!!!");
@@ -727,10 +580,10 @@ byte sd_buf2 []={0x00, 0x06,
 	  // byte rspds2 [] = {0x80, 0x03, 0x3a, 2, 8, 1};     This sensor looks to be the passanger sensor (1 has passanger, 0 no passanger) or am I wrong?
 	  byte rspds2 [] = {0x80, 0x03, 0x6a, 2, 8, 0};     
       return (hu_aap_enc_send (chan, rspds2, sizeof (rspds2)));           // Send Sensor Notification
-	   ms_sleep (2);
-	/*  byte rspds [] = {0x80, 0x03, 0x08, 2, 10, 0x80, 0x20, 0x18, 0x00};    
-	   return (hu_aap_enc_send (chan, rspds, sizeof (rspds)));    
 	   
+	 /* byte rspds [] = {0x80, 0x03, 0x0a, 0x0a, 0x80, 0x80, 0xbc, 0x8a, 0xc9, 0xd2, 0x13, 0x00, 0x30, 0x01};    
+	   return (hu_aap_enc_send (chan, rspds, sizeof (rspds)));    
+	
 	   ms_sleep (2);
 	  byte rspds3 [] = {0x80, 0x03, 0x08, 0x00};    
 	   return (hu_aap_enc_send (chan, rspds3, sizeof (rspds3)));    
@@ -827,24 +680,23 @@ byte sd_buf2 []={0x00, 0x06,
     return (0);
   }
 
-
+ int aa_pro_vid_b02 (int chan, byte * buf, int len) { 
+ //toggle_get_video(0);  //Stop fetching the video
+ return(0);
+ }
 //aa_start 03
   int aa_pro_vid_b01 (int chan, byte * buf, int len) {                  // Media Video Start Request...
+  hex_dump("Video Start Req: ",len, buf, len);
     if (len != 6 || buf [2] != 0x08 || buf [4] != 0x10)
       loge ("Media Video Start Request");
     else
       logd ("Media Video Start Request: %d %d", buf [3], buf [5]);
     int ret = 0;
-
-//    byte rsp2 [] = {0x80, 0x08, 0x08, 1, 0x10, 1};                      // 1, 1     VideoFocus gained focusState=1 unsolicited=true
-//    ret = hu_aap_enc_send (chan, rsp2, sizeof (rsp2));                  // Send VideoFocus Notification
-//    ms_sleep (300);
-/*
-    //#define MAX_UNACK 8     //1;
-    byte rsp [] = {0x80, 0x03, 0x08, 2, 0x10, 1, 0x18, 0};//0x1a, 4, 0x08, 1, 0x10, 2};      // 1/2, MaxUnack, int[] 1        2, 0x08, 1};//
-    ret = hu_aap_enc_send (chan, rsp, sizeof (rsp));                    // Respond with Config Response
-    //if (ret)
-*/
+	vid_ack[3]=vid_ack[3]+1;
+	
+	//toggle_get_video(1);
+	  first_run=0;
+	  
       return (ret);
   }
   int aa_pro_vid_b07 (int chan, byte * buf, int len) {                  // Media Video ? Request...
@@ -858,7 +710,9 @@ byte sd_buf2 []={0x00, 0x06,
 
   int aa_pro_sen_b01 (int chan, byte * buf, int len) {                  // Sensor Start Request...
     if (len != 6 || buf [2] != 0x08 || buf [4] != 0x10)
-      loge ("Sensor Start Request");
+	{loge ("Sensor Start Request");
+	//hex_dump ("HEX_DUMP: ", 64,buf , len);
+	}
     else
       logd ("Sensor Start Request sensor: %d   period: %d", buf [3], buf [5]);  // R 1 SEN b 00000000 08 01 10 00     Sen: 1, 10, 3, 8, 7
      // hex_dump("Sensor",64,buf,len);                                                                          // Yes: SENSOR_TYPE_COMPASS/LOCATION/RPM/DIAGNOSTICS/GEAR      No: SENSOR_TYPE_DRIVING_STATUS
@@ -887,11 +741,14 @@ byte sd_buf2 []={0x00, 0x06,
 
   int mic_change_status = 0;
   int hu_aap_mic_get () {
+	  return (mic_change_status);
+	  /*
     int ret_status = mic_change_status;                                 // Get current mic change status
     if (mic_change_status == 2 || mic_change_status == 1) {             // If start or stop...
       mic_change_status = 0;                                            // Reset mic change status to "No Change"
     }
     return (ret_status);                                                // Return original mic change status
+	*/
   }
   int aa_pro_mic_b01 (int chan, byte * buf, int len) {                  // Media Mic Start Request...
     if (len != 4 || buf [2] != 0x08)
@@ -901,7 +758,7 @@ byte sd_buf2 []={0x00, 0x06,
     return (0);
   }
   int aa_pro_mic_b04 (int chan, byte * buf, int len) {
-    hex_dump ("MIC ACK: ", 16, buf, len);
+   // hex_dump ("MIC ACK: ", 16, buf, len);
     return (0);
   }
   int aa_pro_mic_b05 (int chan, byte * buf, int len) {
@@ -919,13 +776,20 @@ byte sd_buf2 []={0x00, 0x06,
     return (0);
   }
 
+  int aa_pro_gen_not (int chan, byte * buf, int len) {                  //General message notification
+  // hex_dump ("HEX_DUMP: ", 64,buf , len);
+  // byte rspds [] = {0x80, 0x03, 0x0a, 0x02, 0x30, 0x31, 0x10, 0x01};                
+  // hu_aap_enc_send (chan, rspds, sizeof (rspds));  
+  return(0);
+  }
+  
 
 
 
 
   typedef int (* aa_type_ptr_t) (int chan, byte * buf, int len);
 
-  aa_type_ptr_t aa_type_array [AA_CH_MAX + 1] [3] [32] = {              // 0 - 31, 32768-32799, 65504-65535
+  aa_type_ptr_t aa_type_array [15] [3] [32] = {              // 0 - 31, 32768-32799, 65504-65535
                                                                         // Sync with hu_tra.java, hu_aap.h and hu_aap.c:aa_type_array[]
 // Channel 0 Ctr Control:
     aa_pro_ctr_a00, aa_pro_ctr_a01, aa_pro_ctr_a02, aa_pro_ctr_a03, aa_pro_ctr_a04, aa_pro_ctr_a05, aa_pro_ctr_a06, aa_pro_all_a07, aa_pro_ctr_a08, aa_pro_ctr_a09, aa_pro_ctr_a0a, aa_pro_ctr_a0b, aa_pro_ctr_a0c, aa_pro_ctr_a0d, aa_pro_ctr_a0e, aa_pro_ctr_a0f,
@@ -954,7 +818,7 @@ byte sd_buf2 []={0x00, 0x06,
 // Channel 2 Vid Video:
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-    aa_pro_snk_b00, aa_pro_vid_b01, NULL, NULL, NULL, NULL, NULL, aa_pro_vid_b07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    aa_pro_snk_b00, aa_pro_vid_b01, aa_pro_vid_b02, NULL, NULL, NULL, NULL, aa_pro_vid_b07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
@@ -993,38 +857,117 @@ byte sd_buf2 []={0x00, 0x06,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 
+	
+// Channel 8 BluetoothAdapter:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, aa_pro_sen_b01, NULL, NULL, aa_pro_mic_b04, aa_pro_mic_b05, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
+// Channel 9 media_playback_service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
+// Channel 10 Navigation Status Service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, aa_pro_ctr_a0d, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
+// Channel 11 phone_status_service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, aa_pro_sen_b01, NULL, NULL, aa_pro_mic_b04, aa_pro_mic_b05, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
+// Channel 12 media_browser_service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, aa_pro_sen_b01, NULL, NULL, aa_pro_mic_b04, aa_pro_mic_b05, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
+// Channel 13 vendor_extension_service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, aa_pro_gen_not, NULL, NULL, aa_pro_mic_b04, aa_pro_mic_b05, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,	
+	
+// Channel 14 generic_notification_service:
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, aa_pro_all_a07, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, aa_pro_sen_b01, NULL, NULL, aa_pro_mic_b04, aa_pro_mic_b05, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+	
   };
 
 	
   
-  void iaap_video_decode (byte * buf, int len) {
+  void iaap_media_decode (int chan, byte * buf, int len) {
 
-    byte * q_buf = vid_write_tail_buf_get (len);                         // Get queue buffer tail to write to     !!! Need to lock until buffer written to !!!!
+
+    byte * q_buf = med_write_tail_buf_get (len+1);                        // Get queue buffer tail to write to     !!! Need to lock until buffer written to !!!!
     if (ena_log_verbo)
-      logd ("video q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
+      logd ("media q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
     if (q_buf == NULL) {
       loge ("Error video no q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
       //return;                                                         // Continue in order to write to record file
     }
     else
+	{
+		q_buf[0]=chan;
+        memcpy (&q_buf[1], buf, len);     // Copy video to queue buffer
+                                         
+	  
+	}
+
+	return;
+  }  
+  
+  void iaap_video_decode (byte * buf, int len) {
+
+  
+ 
+    byte * q_buf = vid_write_tail_buf_get (len);                         // Get queue buffer tail to write to     !!! Need to lock until buffer written to !!!!
+    if (ena_log_verbo)
+      logd ("video q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
+    if (q_buf == NULL) {
+      loge ("Error video no q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
+	  loge ("Going to reset the video buffers and start fresh...");
+	  reset_vid_buf();
+		 byte data [] = {   0x80, 0x08, 0x08, 0x02, 0x10, 0x01};
+         hu_aap_enc_send (3, data, 6);
+		 ms_sleep(100);
+		 data[3]=1;
+		 hu_aap_enc_send (3, data, 6);
+	    
+      //return;                                                         // Continue in order to write to record file
+    }
+    else
+	{
+	  //q_buf[0]=AA_CH_VID;
       memcpy (q_buf, buf, len);                                         // Copy video to queue buffer
+	}
 
-    if (vid_rec_ena == 0)                                               // Return if video recording not enabled
+   
       return;
+	  
 
-#ifndef NDEBUG
-    char * vid_rec_file = "/home/m/dev/hu/aa.h264";
-  #ifdef __ANDROID_API__
-    vid_rec_file = "/sdcard/hu.h264";
-  #endif
-
-    if (vid_rec_fd < 0)
-      vid_rec_fd = open (vid_rec_file, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
-    int written = -77;
-    if (vid_rec_fd >= 0)
-      written = write (vid_rec_fd, buf, len);
-    logd ("Video written: %d", written);
-#endif
   }
 
 /* 8,192 bytes per packet at stereo 48K 16 bit = 42.667 ms per packet                            Timestamp = uptime in microseconds:
@@ -1040,17 +983,15 @@ ms: 337, 314                                                                    
   int aud_rec_fd  = -1;
 
   void iaap_audio_decode (int chan, byte * buf, int len) {
-//*
 
     //hu_uti.c:  #define aud_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
-#define aud_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
+	#define aud_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
     if (len > aud_buf_BUFS_SIZE) {
       loge ("Error audio len: %d  aud_buf_BUFS_SIZE: %d", len, aud_buf_BUFS_SIZE);
       len = aud_buf_BUFS_SIZE;
     }
-
-
-    byte * q_buf = aud_write_tail_buf_get (len);                         // Get queue buffer tail to write to     !!! Need to lock until buffer written to !!!!
+	
+    byte * q_buf = aud_write_tail_buf_get (len+1);                         // Get queue buffer tail to write to     !!! Need to lock until buffer written to !!!!
     if (ena_log_verbo)
       logd ("audio q_buf: %p  buf: %p  len: %d", q_buf, buf, len);
     if (q_buf == NULL) {
@@ -1058,9 +999,14 @@ ms: 337, 314                                                                    
       //return;                                                         // Continue in order to write to record file
     }
     else {
-      memcpy (q_buf, buf, len);                                         // Copy audio to queue buffer
-
-      if (0){//chan == AA_CH_AU1 || chan == AA_CH_AU2) {
+		q_buf[0]=chan;
+        memcpy (&q_buf[1], buf, len);                                         // Copy audio to queue buffer
+	}
+	return;
+		//memcpy(&global_audio_data[global_audio_position],buf,len);
+		//global_audio_position=global_audio_position+len;
+		
+      /*if (0){//chan == AA_CH_AU1 || chan == AA_CH_AU2) {
         len *= 6;                                                       // 48k stereo takes 6 times the space
         if (len > aud_buf_BUFS_SIZE) {
           loge ("Error * 6  audio len: %d  aud_buf_BUFS_SIZE: %d", len, aud_buf_BUFS_SIZE);
@@ -1083,12 +1029,12 @@ ms: 337, 314                                                                    
           q_buf [idx +11] = buf [idxi + 1];
           idxi += 2;
         }
-      }
+      }*/
     }
 
 //*/
-    if (aud_rec_ena == 0)                                               // Return if audio recording not enabled
-      return;
+   // if (aud_rec_ena == 0)                                               // Return if audio recording not enabled
+      //return;
 
 /*#ifndef NDEBUG
     char * aud_rec_file = "/home/m/dev/hu/aa.pcm";
@@ -1103,13 +1049,26 @@ ms: 337, 314                                                                    
       written = write (aud_rec_fd, buf, len);
     logv ("Audio written: %d", written);
 //#endif*/
+  //}
+
+
+int iaap_media_process (int chan, int msg_type, int flags, byte * buf, int len) {     // Process video packet
+
+//new message starts with 32771 (8003)
+//8001 is the state (shuffle,source,etc), we will need to concat all between.
+	
+			iaap_media_decode(chan,buf,len);
+	
+
+	
+
+    return (0);
   }
-
-
 
   byte aud_ack [] = {0x80, 0x04, 0x08, 0, 0x10,  1};                    // Global Ack: 0, 1     Same as video ack ?
 
   //int aud_ack_ctr = 0;
+  
   int iaap_audio_process (int chan, int msg_type, int flags, byte * buf, int len) { // 300 ms @ 48000/sec   samples = 14400     stereo 16 bit results in bytes = 57600
     //loge ("????????????????????? !!!!!!!!!!!!!!!!!!!!!!!!!   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   aud_ack_ctr: %d  len: %d", aud_ack_ctr ++, len);
 
@@ -1127,7 +1086,7 @@ ms: 337, 314                                                                    
 
     //hex_dump ("AUDIO: ", 16, buf, len);
     if (len >= 10) {
-      int ctr = 0;
+   /*   int ctr = 0;
       unsigned long ts = 0, t2 = 0;
       for (ctr = 2; ctr <= 9; ctr ++) {
         ts = ts << 8;
@@ -1137,7 +1096,7 @@ ms: 337, 314                                                                    
         if (ctr == 6)
           logv ("iaap_audio_process ts: %d 0x%x  t2: %d 0x%x", ts, ts, t2, t2);
       }
-      logv ("iaap_audio_process ts: %d 0x%x  t2: %d 0x%x", ts, ts, t2, t2);
+      logv ("iaap_audio_process ts: %d 0x%x  t2: %d 0x%x", ts, ts, t2, t2);*/
 
       iaap_audio_decode (chan, & buf [10], len - 10);//assy, assy_size);                                                                                    // Decode PCM audio fully re-assembled
     }
@@ -1150,7 +1109,7 @@ ms: 337, 314                                                                    
 // MaxUnack
 //loge ("????????????????????? !!!!!!!!!!!!!!!!!!!!!!!!!   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   vid_ack_ctr: %d  len: %d", vid_ack_ctr ++, len);
 int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respond with ACK (for all fragments ?)
-
+	//logd("Sending Video Ack");
     if (0) {
     }
     else if (flags == 11 && (msg_type == 0 || msg_type == 1) && (buf [10] == 0 && buf [11] == 0 && buf [12] == 0 && buf [13] == 1)) {  // If Not fragmented Video
@@ -1180,19 +1139,32 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
 
   int iaap_msg_process (int chan, int flags, byte * buf, int len) {
 
+  //hex_dump ("HEX_DUMP: ", 256, buf, len);
+  
     int msg_type = (int) buf [1];
     msg_type += ((int) buf [0] * 256);
+	//logd("message type: %d",msg_type);
 
     if (ena_log_verbo)
-      logd ("iaap_msg_process msg_type: %d  len: %d  buf: %p", msg_type, len, buf);
+      logd ("iaap_msg_process msg_type: %d  len: %d  buf: %p chan: %d", msg_type, len, buf, chan);
 
     int run = 0;
     if ((chan == AA_CH_AUD || chan == AA_CH_AU1 || chan == AA_CH_AU2) && (msg_type == 0 || msg_type == 1)) {// || flags == 8 || flags == 9 || flags == 10 ) {         // If Audio Output...
       return (iaap_audio_process (chan, msg_type, flags, buf, len)); // 300 ms @ 48000/sec   samples = 14400     stereo 16 bit results in bytes = 57600
     }
-    else if (chan == AA_CH_VID && msg_type == 0 || msg_type == 1 || flags == 8 || flags == 9 || flags == 10 ) {    // If Video...
+	
+    else if ((chan == AA_CH_VID && msg_type == 0 || msg_type == 1 || flags == 8 || flags == 9 || flags == 10 ) && (chan != AA_CH_MED)) {    // If Video...
+    //else if (chan == AA_CH_VID)  {    // If Video...
+	  //logd("Channel is: %d",chan);
       return (iaap_video_process (msg_type, flags, buf, len));
     }
+	else if (chan == AA_CH_MED && msg_type != 7) {
+		//logd("Channel is: %d",chan);
+		 return (iaap_media_process (chan, msg_type, flags, buf, len));
+	 }
+	 else if (chan == AA_CH_NAV && (msg_type == 32772 || msg_type == 32773))
+		 return (iaap_media_process (chan, msg_type, flags, buf, len));
+	 
     else if (msg_type >= 0 && msg_type <= 31)
       run = 0;
     else if (msg_type >= 32768 && msg_type <= 32799)
@@ -1214,7 +1186,10 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     if (func)
       prot_func_ret = (* func) (chan, buf, len);
     else
-      loge ("No func chan: %d %s  run: %d  num: %d", chan, chan_get (chan), run, num);
+		{
+		loge ("No func chan: %d %s  run: %d  num: %d", chan, chan_get (chan), run, num);
+		hex_dump ("HEX_DUMP: ", 256, buf, len);
+		}
 
         logd ("Function to be run: %d %s  run: %d  num: %d", chan, chan_get (chan), run, num);
   
@@ -1248,30 +1223,58 @@ int ret = hu_aap_enc_send (AA_CH_VID, vid_ack, sizeof (vid_ack));      // Respon
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
     return (ret);
+	exit(0);
   }
 
-  int hu_aap_start (byte ep_in_addr, byte ep_out_addr,long myip_string, int transport_audio, int hr) {                // Starts Transport/USBACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
-logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio);
-    if (iaap_state == hu_STATE_STARTED) {
+  int hu_aap_start (int cmd_len, byte * cmd_buf,long myip_string, int transport_audio, int hr) {                // Starts Transport/USBACC/OAP, then AA protocol w/ VersReq(1), SSL handshake, Auth Complete
+ 
+vid_ack[3]=-1;
+  logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio);
+    /* Should not happen!
+	if (iaap_state == hu_STATE_STARTED) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (0);
     }
-
+	*/
+	hex_dump ("CMD_BUF: ", 128, cmd_buf, cmd_len);
+	
     iaap_state = hu_STATE_STARTIN;
     logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
 
-    int ret = ihu_tra_start (ep_in_addr, ep_out_addr, myip_string, transport_audio, hr);                   // Start Transport/USBACC/OAP
+    int ret = ihu_tra_start (cmd_buf[1], cmd_buf[2],cmd_buf[3], myip_string, transport_audio, hr);                   // Start Transport/USBACC/OAP
+	new_buf_length=(cmd_len-4+sizeof(sd_buf2));
+	new_sdbuf=(char *) malloc(new_buf_length);
+	int idx=0;
+	int i=0;
+	for (i = 0; i < 124 ; i ++) { new_sdbuf[i]=sd_buf2[i];	idx++;}
+	new_sdbuf[idx++]=(cmd_len-4) & 0xFF;
+    for (i = 4; i<(cmd_len);i++) { new_sdbuf[idx++]=cmd_buf[i];}
+    for (i = 125; i<sizeof(sd_buf2);i++) { new_sdbuf[idx++]=sd_buf2[i];}
+		
+
+	
+	hex_dump ("CMD_BUF: ", sizeof(sd_buf2), sd_buf2, sizeof(sd_buf2));
+	hex_dump ("CMD_BUF: ", new_buf_length, new_sdbuf, new_buf_length);
+	
+	
+	//memmove(sd_buf2,updated_sdbuf,cmd_len-3+sizeof(sd_buf2));
+	
+	
+	// Also add a , byte * hf_mac to the fucntion when re-enabeling bluetooth.
+	//hex_dump ("BluetoothMac: ", 32, hf_mac, 17);
+	//memcpy(bluetooth_mac,hf_mac,17);
+	
     if (ret) {
       iaap_state = hu_STATE_STOPPED;
       logd ("  SET: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
       return (ret);                                                     // Done if error
     }
-	logd("got till here");
+	
     byte vr_buf [] = {0, 3, 0, 6, 0, 1, 0, 1, 0, 2};                    // Version Request
     ret = hu_aap_tra_set (0, 3, 1, vr_buf, sizeof (vr_buf));
-	logd("not sure about this?");
+	
     ret = hu_aap_tra_send (vr_buf, sizeof (vr_buf), 1000);              // Send Version Request
-	logd("will like to know this as well");
+	
     if (ret < 0) {
       loge ("Version request send ret: %d", ret);
       hu_aap_stop ();
@@ -1282,10 +1285,9 @@ logd("Starting hu_aap_start %d audio transport: %d",myip_string,transport_audio)
     errno = 0;
 	int ret_count=5;
 	do {
-    //ret = hu_aap_tra_recv (buf, sizeof (buf), 1000);                    // Get Rx packet from Transport:    Wait for Version Response
-    ret = hu_aap_tra_recv (buf, sizeof (buf), 1000);                    // Get Rx packet from Transport:    Wait for Version Response
-	ret_count--;
-	logd ("Version response recv ret, attemp %d", ret_count);
+    ret = hu_aap_tra_recv (buf,12, -4);                    // Get Rx packet from Transport:    Wait for Version Response
+    ret_count--;
+	logd ("Version response recv ret, attemp %d, ret value: %d", ret_count, ret);
 	} while (ret!=12 && ret_count>=0);
     if (ret <= 0) {
       loge ("Version response recv ret: %d", ret);
@@ -1332,7 +1334,9 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 
 
   int iaap_recv_dec_process (int chan, int flags, byte * buf, int len) {// Decrypt & Process 1 received encrypted message
-
+  //logd("Decoding channel %d, with flag: %d, size of buffer: %d, reported lenght: %d",chan,flags,sizeof(buf),len);
+	//hex_dump ("iaap_recv_dec_process: ", 1024, buf, len);
+	 byte dec_buf [65536 * 4] = {0};
     int bytes_written = BIO_write (hu_ssl_rm_bio, buf, len);           // Write encrypted to SSL input BIO
     if (bytes_written <= 0) {
       loge ("BIO_write() bytes_written: %d", bytes_written);
@@ -1360,8 +1364,7 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
     if (bytes_read <= 0) {
       loge ("ctr: %d  SSL_read() bytes_read: %d  errno: %d", ctr, bytes_read, errno);
       hu_ssl_ret_log (bytes_read);
-	// Emil - uncoment next line
-	// return (-1);                                                      // Fatal so return error and de-initialize; Should we be able to recover, if Transport data got corrupted ??
+	return (-1);                                                      // Fatal so return error and de-initialize; Should we be able to recover, if Transport data got corrupted ??
     }
     if (ena_log_verbo)
       logd ("ctr: %d  SSL_read() bytes_read: %d", ctr, bytes_read);
@@ -1400,7 +1403,10 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 
 */
 
-  int hu_aap_recv_process () {                                          // 
+
+
+
+ int hu_aap_recv_process () {                                          // 
                                                                     // Terminate unless started or starting (we need to process when starting)
     if (iaap_state != hu_STATE_STARTED && iaap_state != hu_STATE_STARTIN) {
       loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
@@ -1438,7 +1444,7 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
     while (have_len > 0) {                                              // While length remaining to process,... Process Rx packet:
       // if (ena_log_verbo) {
          // logd ("Recv while (have_len > 0): %d", have_len);
-        // hex_dump ("LR: ", 16, buf, have_len);
+         //hex_dump ("LR: ", 16, buf, have_len);
       // }
       int chan = (int) buf [0];                                         // Channel
       int flags = buf [1];                                              // Flags
@@ -1456,8 +1462,9 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
         hu_aap_stop ();
         return (-1);
       }
-      if (chan == AA_CH_VID && flags == 9) {                            // If First fragment Video... (Packet is encrypted so we can't get the real msg_type or check for 0, 0, 0, 1)
-        int total_size = (int) buf [3];
+      if ((chan == AA_CH_VID || chan== 9 || chan == 10 )&& flags == 9)  {                            // If First fragment Video... (Packet is encrypted so we can't get the real msg_type or check for 0, 0, 0, 1)
+        //logd("First fragment Video");
+		int total_size = (int) buf [3];
         total_size += ((int) buf [2] * 256);
         total_size += ((int) buf [1] * 256 * 256);
         total_size += ((int) buf [0] * 256 * 256 * 256);
@@ -1514,5 +1521,202 @@ http://www.cisco.com/c/en/us/support/docs/security-vpn/secure-socket-layer-ssl/1
 	memset(rx_buf, 0, sizeof(rx_buf));
     return (ret);                                                       // Return value from the last iaap_recv_dec_process() call; should be 0
   }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /*
-*/
+  int hu_aap_recv_process () {                                          // 
+                                                                    // Terminate unless started or starting (we need to process when starting)
+    if (iaap_state != hu_STATE_STARTED && iaap_state != hu_STATE_STARTIN) {
+      loge ("CHECK: iaap_state: %d (%s)", iaap_state, state_get (iaap_state));
+      return (-1);
+    }
+
+    int ret = 0;
+    errno = 0;
+    
+    
+	int rx_len=16384; //Use 256Kb max len if Wifi
+   /* if (transport_type == 2)	
+		rx_len= 4*16384;*
+	int have_len = 0;                                                   
+	
+  
+  if (transport_type == 2) 
+   {
+	byte * buf = rx_buf;
+	rx_len = 6; 
+    have_len = hu_aap_tra_recv (rx_buf, rx_len, -1); 			    // Get Rx packet from Transport
+	if (have_len == 0)                                               // If no data, then done w/ no data
+      return (0);
+    
+	while (have_len > 0) {                                              // While length remaining to process,... Process Rx packet:
+     
+      int chan = (int) buf [0];                                         // Channel
+      int flags = buf [1];                                              // Flags
+	
+      int enc_len = (int) buf [3];                                      // Encoded length of bytes to be decrypted (minus 4/8 byte headers)
+      enc_len += ((int) buf [2] * 256);
+
+      int msg_type = (int) buf [5];                                     // Message Type (or post handshake, mostly indicator of SSL encrypted data)
+      msg_type += ((int) buf [4] * 256);
+
+      have_len -= 4;                                                    // Length starting at byte 4: Unencrypted Message Type or Encrypted data start
+      buf += 4;                                                         // buf points to data to be decrypted
+      if (flags & 0x08 != 0x08) {
+        loge ("NOT ENCRYPTED !!!!!!!!! have_len: %d  enc_len: %d  buf: %p  chan: %d %s  flags: 0x%x  msg_type: %d", have_len, enc_len, buf, chan, chan_get (chan), flags, msg_type);
+        hu_aap_stop ();
+        return (-1);
+      }
+      if ((chan == AA_CH_VID || chan== 9 )&& flags == 9) {                             // If First fragment Video... (Packet is encrypted so we can't get the real msg_type or check for 0, 0, 0, 1)
+        //logd("First fragment Video");
+		int total_size = (int) buf [3];
+        total_size += ((int) buf [2] * 256);
+        total_size += ((int) buf [1] * 256 * 256);
+        total_size += ((int) buf [0] * 256 * 256 * 256);
+
+        if (total_size > max_assy_size)                                 // If new  max_assy_size... (total_size seen as big as 151 Kbytes)
+          max_assy_size = total_size;                                   // Set new max_assy_size      See: jni/hu_aap.c:  byte assy [65536 * 16] = {0}; // up to 1 megabyte
+                                                                         //                               & jni/hu_uti.c:  #define vid_buf_BUFS_SIZE    65536 * 4
+                                                                        // Up to 256 Kbytes// & src/ca/yyx/hu/hu_tro.java:    byte [] assy = new byte [65536 * 16];
+                                                                        // & src/ca/yyx/hu/hu_tra.java:      res_buf = new byte [65536 * 4];
+        if (total_size > 320 * 1024)
+          logw ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
+        else
+          logv ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
+        have_len -= 4;                                                  // Remove 4 length bytes inserted into first video fragment
+        buf += 4;
+      }
+	  
+      if (have_len < enc_len) {                                         // If we need more data for the full packet...
+        int need_len = enc_len - have_len;
+	
+		
+			//logd("current Buffer size: %d, and we try to feed in: %d",sizeof(buf),need_len);
+			int need_ret = hu_aap_tra_recv (& buf [have_len], need_len, -1);// Get Rx packet from Transport. Use -1 instead of iaap_tra_recv_tmo to indicate need to get need_len bytes
+			//logd("need len: %d, received len: %d",need_len,need_ret);
+			// Length remaining for all sub-packets plus 4/8 byte headers
+					if (need_ret != need_len) {
+						logd ("have_len: %d < enc_len: %d  need_len: %d", have_len, enc_len, need_len);
+						loge ("Recv bytes: %d but we expected: %d", need_ret, need_len);
+									
+					   hu_aap_stop ();
+
+					  return (-1);
+					 
+					}
+        have_len = enc_len;                                             // Length to process now = encoded length for 1 packet
+      }
+
+      ret = iaap_recv_dec_process (chan, flags, buf, enc_len);          // Decrypt & Process 1 received encrypted message
+      if (ret < 0) {                                                    // If error...
+        loge ("Error iaap_recv_dec_process() ret: %d  have_len: %d  enc_len: %d  buf: %p  chan: %d %s  flags: 0x%x  msg_type: %d", ret, have_len, enc_len, buf, chan, chan_get (chan), flags, msg_type);
+        hu_aap_stop ();
+        return (ret);  
+      }
+
+      have_len -= enc_len;                                              // Consume processed sub-packet and advance to next, if any
+      buf += enc_len;
+      if (have_len != 0)
+        logd ("iaap_recv_dec_process() more than one message   have_len: %d  enc_len: %d", have_len, enc_len);
+    }
+	return(0);
+   }
+   else
+   {
+	 //  if (transport_type==2)
+	// have_len = hu_aap_tra_recv ( & global_data [global_position], rx_len, -6);     // Get Rx packet from Transport
+	  // else
+	 have_len = hu_aap_tra_recv ( & global_data [global_position], rx_len, 150);     // Get Rx packet from Transport
+	 //logd("Respons size is: %d positions: %d",have_len,global_position);	 
+	 if ((have_len <= 0 && transport_type == 2)  || (have_len==0 && transport_type == 1))                                               // If no data, then done w/ no data
+	 {
+		return (0);
+	 }
+	//
+	global_position=global_position+have_len;
+    ret=data_loop();	
+   }
+	
+	
+    return (ret);                                                       // Return value from the last iaap_recv_dec_process() call; should be 0
+  //}
+  }
+ int data_loop () {
+	 
+	 
+	 int enc_len = (int) global_data [3];                                      
+     enc_len += ((int) global_data [2] * 256);
+	 //byte * buf = rx_buf;
+	 //logd("Encoded lenght is: %d, and we currently have: %d",enc_len,global_position);
+	 if (global_position<enc_len)
+		  return(0);
+	 
+	 while (global_position>=enc_len+4) {
+     int data_possition=0;
+	  int chan = (int) global_data [0];                                         // Channel
+      int flags = global_data [1];                                              // Flags
+	
+      int msg_type = (int) global_data [5];                                     // Message Type (or post handshake, mostly indicator of SSL encrypted data)
+      msg_type += ((int) global_data [4] * 256);
+			//logd("Channel %d, flags: %d, encoded lenght: %d, msg type: %d",chan, flags, enc_len,msg_type);
+       	data_possition += 4;                                                         // buf points to data to be decrypted
+      if (flags & 0x08 != 0x08) {
+            hu_aap_stop ();
+          return (-1);
+      }
+      if ((chan == AA_CH_VID || chan== 9 )&& flags == 9) {                            // If First fragment Video... (Packet is encrypted so we can't get the real msg_type or check for 0, 0, 0, 1)
+        //logd("First fragment Video");
+		int total_size = (int) global_data [7];
+        total_size += ((int) global_data [6] * 256);
+        total_size += ((int) global_data [5] * 256 * 256);
+        total_size += ((int) global_data [4] * 256 * 256 * 256);
+
+        if (total_size > max_assy_size)                                 // If new  max_assy_size... (total_size seen as big as 151 Kbytes)
+          max_assy_size = total_size;                                   // Set new max_assy_size      See: jni/hu_aap.c:  byte assy [65536 * 16] = {0}; // up to 1 megabyte
+                                                                         //                               & jni/hu_uti.c:  #define vid_buf_BUFS_SIZE    65536 * 4
+                                                                        // Up to 256 Kbytes// & src/ca/yyx/hu/hu_tro.java:    byte [] assy = new byte [65536 * 16];
+                                                                        // & src/ca/yyx/hu/hu_tra.java:      res_buf = new byte [65536 * 4];
+        if (total_size > 320 * 1024)
+          logw ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
+        else
+          logv ("First fragment total_size: %d  max_assy_size: %d", total_size, max_assy_size);
+       
+        data_possition += 4;
+      }
+
+
+
+		iaap_recv_dec_process (chan, flags, &global_data[data_possition], enc_len);  // Decode one message only
+		memmove(&global_data[0],&global_data[data_possition+enc_len],sizeof(global_data)-enc_len); // shift all content to the left
+		global_position=global_position-enc_len-data_possition;
+		if (global_position > 0)
+		{ 
+		enc_len = (int) global_data [3];
+		enc_len += ((int) global_data [2] * 256); 
+		//logd("We have more packets, is it a full packet? Global_pos: %d, enc_len: %d, data_pos: %d, size: %d", global_position,enc_len,data_possition,sizeof(global_data));
+		
+		}
+		
+	 }
+	 return(1);
+ }*/
+
