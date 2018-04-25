@@ -20,7 +20,7 @@
 	  <string name="gps_shar_desc">Share current device GPS data with your phone.</string>
 	  <string name="aut_sp_vol_tit">Auto adjust volume on speed</string>
 	  <string name="aut_sp_vol_desc">When activated the app will increase the audio volume with 1 step at each of the following speed limits, when slowing down it will also decrease the media volume with 1 step: \n 1) At 30 KM/H (~ 20 MPH) \n 2) At 50 KM/H (~ 30 MPH) \n 3) At 80 KM/H (~ 50MPH) \n 4) At 110 KM/H (~ 70MPH) \n 5) At 130 KM/H (~ 80MPH)</string>
-	  <string name="audiosink">Sink audio</string>
+	  <string name="audiosink">Sync audio</string>
 	  <string name="wifi_cat_tit">Wifi settings</string>
 	  <string name="audiosink_desc">Unchecking will keep the audio on the phone.</string>
 	  <string name="auwi">Launch app when connected to Wifi</string>
@@ -34,7 +34,7 @@
 	  <string name="unit_tit">Headunit name</string>
 	  <string name="ausm">Automatically start SelfMode</string>
 	  <string name="slowcpu">Slow CPU</string>
-	  <string name="slowcpudesc">Workaround for slow CPU, this will disable void any audio sink setting.</string>
+	  <string name="slowcpudesc">Workaround for slow CPU, this will disable void any audio sync setting.</string>
 	  <string name="ip_desc">Leave blank for autodetect</string>
 	  <string name="startonboot">Start HUR service on device boot</string>
 	<string name="err_usberr">Error comunicating with USB device</string>
