@@ -1,0 +1,28 @@
+<resources>
+	<string-array name="sensorArray">
+		<item>Use Light Sensor (if available)</item>
+		<item>Calculated Sunset/Sunrise</item>
+		<item>Day</item>
+		<item>Night</item>
+		<item>Off</item>
+	</string-array>
+
+	<string-array name="sensorValues">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+		<item>3</item>
+		<item>4</item>
+	</string-array>
+	<string-array name="resValues">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+	</string-array>
+
+	<string-array name="resArray">
+		<item>800x480</item>
+		<item>1280x720</item>
+		<item>1920x1080</item>
+	</string-array>
+</resources>

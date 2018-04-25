@@ -33,7 +33,7 @@
     byte ep_in_addr  = -1;
     byte ep_out_addr = -1;
 
-    ret = hu_aap_start (ep_in_addr, ep_out_addr);                      // Start AA Protocol
+    ret = hu_aap_start (ep_in_addr, ep_out_addr, "",true,0);                      // Start AA Protocol
     if (ret < 0) {
       return (ret);
     }

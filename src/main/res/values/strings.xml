@@ -1,0 +1,48 @@
+<resources>
+	  <string name="cat_vis_tit">Visual and audio settings.</string>
+	  <string name="hud_tit">HUD Mirroring.</string>
+	  <string name="hud_desc">Detect when device is flat and mirror output to be used with HUD display. \n Only usable in self mode.</string>
+	  <string name="hd_tit">Resolution</string>
+	  <string name="hd_desc">Select resolution. \n To use 720p or 1080p option please also enable 720p output inside Android Auto developer settings.</string>
+	  <string name="swdec_desc">Use software video decoding. Bigger compatibility but less performance.</string>
+	  <string name="fps_desc">Time out in uS of the decoder (30fps = 33333), larger number potentially fixes decoding errors but makes the interface slower on response. \n Default value is equivalent of a video working at 60fps.</string>
+	  <string name="msg_error_no_bluetooth">No devices available or bluetooth disabled</string>
+	  <string name="fs_tit">Stretch to full screen</string>
+	  <string name="fs_desc">Un-select if you would like to keep the original aspect ratio.</string>
+	  <string name="nm_tit">Day / Night theme toggle</string>
+	  <string name="nm_desc">Select how should the day and night theme be controlled.</string>
+	  <string name="lux_tit">Night switch threshold</string>
+	  <string name="lux_desc">Specify the lux amount where the app should turn on the night theme.</string>
+	  <string name="sens_tit">Sensor sensibility</string>
+	  <string name="sens_desc">Changes in light condition below this value will be ignored.</string>
+	  <string name="cat_gps_tit">GPS related settings</string>
+	  <string name="gps_shar_tit">Share GPS</string>
+	  <string name="gps_shar_desc">Share current device GPS data with your phone.</string>
+	  <string name="aut_sp_vol_tit">Auto adjust volume on speed</string>
+	  <string name="aut_sp_vol_desc">When activated the app will increase the audio volume with 1 step at each of the following speed limits, when slowing down it will also decrease the media volume with 1 step: \n 1) At 30 KM/H (~ 20 MPH) \n 2) At 50 KM/H (~ 30 MPH) \n 3) At 80 KM/H (~ 50MPH) \n 4) At 110 KM/H (~ 70MPH) \n 5) At 130 KM/H (~ 80MPH)</string>
+	  <string name="audiosink">Sync audio</string>
+	  <string name="wifi_cat_tit">Wifi settings</string>
+	  <string name="audiosink_desc">Unchecking will keep the audio on the phone.</string>
+	  <string name="auwi">Launch app when connected to Wifi</string>
+	  <string name="ssid">Only start the app when connected to a specific Wifi (leave blank for any)</string>
+	  <string name="err_noserv">Cannot connect to Headunit Server. Is it running on the phone?</string>
+	  <string name="err_nowifi">Your not connected to any Wifi...</string>
+	  <string name="err_conterm">Connection to Android Auto has been terminated.</string>
+	  <string name="other_cat_tit">Other settings.</string>
+	  <string name="non_st_k_tit">Non standard input.</string>
+	  <string name="non_st_k_desc">Use custom/non-standard media buttons. \n Useful for units like Joying. Fill in the keycodes to be monitored.</string>
+	  <string name="unit_tit">Headunit name</string>
+	  <string name="ausm">Automatically start SelfMode</string>
+	  <string name="slowcpu">Slow CPU</string>
+	  <string name="slowcpudesc">Workaround for slow CPU, this will disable void any audio sync setting.</string>
+	  <string name="ip_desc">Leave blank for autodetect</string>
+	  <string name="startonboot">Start HUR service on device boot</string>
+	<string name="err_usberr">Error comunicating with USB device</string>
+	<string name="oldusb">USB workaround</string>
+    <string name="debug">Enable Debugging</string>
+	<string name="stor_perm_tit">Storage Permission</string>
+	<string name="stor_perm_desc">To save the debugging log, storage perminssion must be granted.</string>
+	<string name="ignore">Ignore</string>
+
+
+</resources>

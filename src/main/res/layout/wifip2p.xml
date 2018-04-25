@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="WifiP2P Setup"
+        android:textAppearance="@style/TextAppearance.AppCompat.Headline"
+        android:textStyle="normal|bold"
+        android:textSize="34sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="Use the following steps to connect your device over Wifi Direct (P2P) or install and run 'Wifi Direct Launcher' app on the phone for automatization."
+        android:textStyle="normal|bold"
+        android:textSize="24sp" />
+
+    <TextView
+        android:layout_margin="5dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text='1) Open Wifi settings on the phone \n2) Select Advanced (or Wifi direct if available) from the menu\n3) If selected Advance at previous point, find Wifi Direct
+        \n4) Wait for your phone to discover "Headunit Reloaded" group\n5) On this device you will see a dialog showing your phone.\n6) Select phone from dialog window (or select "Headunit Reloaded" from phone\n7) Make sure you accesp the connection on the other device\n'
+        android:textSize="20sp"
+        android:lineSpacingExtra="8sp" />
+
+    <TextView
+        android:layout_margin="5dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Please note not all devices support Wifi Direct and some devices won\'t connect between each other, albeit infromation showing that they are connected."
+        android:textSize="14sp"
+        android:lineSpacingExtra="8sp" />
+</LinearLayout>

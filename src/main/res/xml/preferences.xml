@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:tools="http://schemas.android.com/tools"
+	xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<Preference
+		android:key="exitbutton"
+		android:title=""
+		android:widgetLayout="@layout/pref_exit_button" />
+
+	<PreferenceCategory
+		android:title="@string/cat_vis_tit">
+
+		<CheckBoxPreference android:title="@string/hud_tit"
+			android:defaultValue="false"
+			android:summary="@string/hud_desc"
+			android:key="hud" />
+
+		<CheckBoxPreference android:title="HD"
+			android:defaultValue="false"
+			android:summary="@string/hd_desc"
+			android:key="hires" />
+
+		<CheckBoxPreference android:title="SW decoder"
+			android:defaultValue="false"
+			android:summary="@string/swdec_desc"
+			android:key="h264" />
+
+		<CheckBoxPreference android:title="@string/slowcpu"
+			android:defaultValue="false"
+			android:summary="@string/slowcpudesc"
+			android:dependency="h264"
+			android:key="slowcpu" />
+
+		<CheckBoxPreference android:title="@string/fs_tit"
+			android:defaultValue="true"
+			android:summary="@string/fs_desc"
+			android:key="stretch_full" />
+
+		<ListPreference android:title="@string/nm_tit"
+			android:defaultValue="1"
+			android:summary="@string/nm_desc"
+			android:key="lightsens"
+			android:inputType="number"
+			android:numeric="integer"
+			android:entries="@array/sensorArray"
+			android:entryValues="@array/sensorValues"  />
+
+		<EditTextPreference android:title="@string/lux_tit"
+			android:key="luxval"
+			android:defaultValue="200"
+			android:inputType="number"
+			android:numeric="integer"
+			android:summary="@string/lux_desc"></EditTextPreference>
+	<EditTextPreference android:title="@string/sens_tit"
+			android:key="luxsensibility"
+			android:defaultValue="20"
+			android:inputType="number"
+			android:numeric="integer"
+			android:summary="@string/sens_desc"></EditTextPreference>
+
+
+		<CheckBoxPreference android:title="@string/audiosink"
+			android:defaultValue="true"
+			android:summary="@string/audiosink_desc"
+			android:key="phoneaudio" />
+
+	</PreferenceCategory>
+
+	<PreferenceCategory
+		android:title="@string/cat_gps_tit">
+
+		<CheckBoxPreference android:title="@string/gps_shar_tit"
+			android:defaultValue="false"
+			android:summary="@string/gps_shar_desc"
+			android:key="share_GPS" />
+
+		<CheckBoxPreference android:title="@string/aut_sp_vol_tit"
+			android:defaultValue="true"
+			android:summary="@string/aut_sp_vol_desc"
+			android:key="auto_adjust_audio" />
+	</PreferenceCategory>
+
+
+	<PreferenceCategory
+		android:title="@string/wifi_cat_tit">
+
+
+
+		<CheckBoxPreference android:title="@string/auwi"
+			android:defaultValue="false"
+
+			android:key="wifi_autorun" />
+
+		<EditTextPreference android:title="Wifi SSID"
+			android:key="ssid"
+			android:defaultValue=""
+			android:dependency="wifi_autorun"
+			android:summary="@string/ssid"></EditTextPreference>
+
+		<EditTextPreference android:title="IP"
+			android:key="ip"
+			android:defaultValue=""
+			android:summary="@string/ip_desc"></EditTextPreference>
+	</PreferenceCategory>
+
+	<PreferenceCategory android:title="@string/other_cat_tit">
+
+		<CheckBoxPreference android:title="@string/oldusb"
+			android:defaultValue="false"
+			android:key="oldusb" />
+
+		<CheckBoxPreference android:title="@string/debug"
+			android:defaultValue="false"
+			android:key="enabledebug" />
+
+
+		<EditTextPreference android:title="@string/unit_tit"
+			android:key="displayname"
+			android:defaultValue="Headunit Reloaded">
+
+		</EditTextPreference>
+
+		<CheckBoxPreference android:title="@string/ausm"
+			android:defaultValue="false"
+			android:key="self_autorun" />
+
+		<CheckBoxPreference android:title="@string/startonboot"
+			android:defaultValue="false"
+			android:key="start_on_boot" />
+
+		<CheckBoxPreference android:title="@string/non_st_k_tit"
+			android:defaultValue="false"
+			android:summary="@string/non_st_k_desc"
+			android:key="non_st_k" />
+
+		<EditTextPreference android:title="Play/Pause"
+			android:key="cust_key_play"
+			android:defaultValue="0"
+			android:inputType="number"
+			android:numeric="integer"
+			android:dependency="non_st_k"
+			></EditTextPreference>
+
+<EditTextPreference android:title="Next"
+			android:key="cust_key_next"
+			android:defaultValue="0"
+			android:inputType="number"
+			android:numeric="integer"
+			android:dependency="non_st_k"
+			></EditTextPreference>
+
+<EditTextPreference android:title="Prev"
+			android:key="cust_key_prev"
+			android:defaultValue="0"
+			android:inputType="number"
+			android:numeric="integer"
+			android:dependency="non_st_k"
+			></EditTextPreference>
+
+<EditTextPreference android:title="Mic"
+			android:key="cust_key_mic"
+			android:defaultValue="0"
+			android:inputType="number"
+			android:numeric="integer"
+			android:dependency="non_st_k"
+			></EditTextPreference>
+
+<EditTextPreference android:title="Phone"
+			android:key="cust_key_phone"
+			android:defaultValue="0"
+			android:inputType="number"
+			android:numeric="integer"
+			android:dependency="non_st_k"
+			></EditTextPreference>
+
+
+	</PreferenceCategory>
+
+</PreferenceScreen>

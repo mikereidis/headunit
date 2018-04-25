@@ -68,11 +68,11 @@
 
   // Enables for hex_dump:
   int ena_hd_hu_aad_dmp = 1;        // Higher level
-  int ena_hd_tra_send   = 0;        // Lower  level
+  int ena_hd_tra_send   = 1;        // Lower  level
   int ena_hd_tra_recv   = 0;
 
   int ena_log_hexdu = 1;//1;    // Hex dump master enable
-  int max_hex_dump  = 64;//32;
+  int max_hex_dump  = 2048;//32;
 
   #ifdef  LOG_FILE
   int logfd = -1;
@@ -167,54 +167,7 @@
     return (ret);
   }
 
-/*int noblock_set (int fd) {
-    //#define IOCTL_METH
-    #ifdef  IOCTL_METH
-    int nbio = 1;
-    errno = 0;
-    int ret = ioctl (fd, FIONBIO, & nbio);
-    if (ret == -1)
-      loge ("noblock_set ioctl errno: %d (%s)", errno, strerror (errno));
-    else
-      logd ("noblock_set ioctl ret: %d", ret);
-    #else
-    errno = 0;
-    int flags = fcntl (fd, F_GETFL);
-    if (flags == -1) {
-      loge ("noblock_set fcntl get errno: %d (%s)", errno, strerror (errno));
-      flags = 0;
-    }
-    else
-      logd ("noblock_set fcntl get flags: %d  nonblock flags: %d", flags, flags & O_NONBLOCK);
-    errno = 0;
-    int ret = fcntl (fd, F_SETFL, flags | O_NONBLOCK);
-    if (ret == -1)
-      loge ("noblock_set fcntl set errno: %d (%s)", errno, strerror (errno));
-    else
-      logd ("noblock_set fcntl set ret: %d", ret);
-    errno = 0;
-    flags = fcntl (fd, F_GETFL);
-    if (flags == -1)
-      loge ("noblock_set fcntl result get errno: %d (%s)", errno, strerror (errno));
-    else
-      logd ("noblock_set fcntl result get flags: %d  nonblock flags: %d", flags, flags & O_NONBLOCK);
-    #endif
-    return (0);
-  }*/
 
-/*
-  int alt_usleep (long us) {    // usleep can't be used in some cases because it uses SIGALRM
-    struct timespec delay;
-    int err;
-    delay.tv_sec = us / 1000000;
-    delay.tv_nsec = 1000 * 1000 * (us % 1000000);
-    errno = 0;
-    do {
-      err = nanosleep (& delay, & delay);
-    } while (err < 0 && errno == EINTR);
-  }
-
-*/
 
   unsigned long us_get () {                                                      // !!!! Affected by time jumps ?
     struct timespec tspec = {0, 0};
@@ -411,7 +364,7 @@
   
     errno = 0;
     if ((dp = opendir (dir)) == NULL) {                                 // Open the directory. If error...
-      if (errno == EACCES)                                              // EACCESS is a common annoyance, Even w/ SU presumably due to SELinux
+      if (errno == EACCES)                                              
         logd ("file_find: can't open directory %s  errno: %d (%s) (EACCES Permission denied)", dir, errno, strerror (errno));
       else
         logd ("file_find: can't open directory %s  errno: %d (%s)", dir, errno, strerror (errno));
@@ -1133,12 +1086,12 @@
   #define aud_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
   int aud_buf_bufs_size = aud_buf_BUFS_SIZE;
 
-  #define   NUM_aud_buf_BUFS   16            // Maximum of NUM_aud_buf_BUFS - 1 in progress; 1 is never used
+  #define   NUM_aud_buf_BUFS   128           // Maximum of NUM_aud_buf_BUFS - 1 in progress; 1 is never used
   int num_aud_buf_bufs = NUM_aud_buf_BUFS;
 
   char aud_buf_bufs [NUM_aud_buf_BUFS] [aud_buf_BUFS_SIZE];
 
-  int aud_buf_lens [NUM_aud_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  int aud_buf_lens [NUM_aud_buf_BUFS] = {0};
 
   int aud_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
   int aud_buf_buf_head = 0;    // Head is next index for reader to read from.
@@ -1261,12 +1214,12 @@
   #define vid_buf_BUFS_SIZE    65536 * 4      // Up to 256 Kbytes
   int vid_buf_bufs_size = vid_buf_BUFS_SIZE;
 
-  #define   NUM_vid_buf_BUFS   16            // Maximum of NUM_vid_buf_BUFS - 1 in progress; 1 is never used
+  #define   NUM_vid_buf_BUFS   512            // Maximum of NUM_vid_buf_BUFS - 1 in progress; 1 is never used
   int num_vid_buf_bufs = NUM_vid_buf_BUFS;
 
   char vid_buf_bufs [NUM_vid_buf_BUFS] [vid_buf_BUFS_SIZE];
 
-  int vid_buf_lens [NUM_vid_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  int vid_buf_lens [NUM_vid_buf_BUFS] = {0};
 
   int vid_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
   int vid_buf_buf_head = 0;    // Head is next index for reader to read from.
@@ -1276,6 +1229,20 @@
   int vid_sem_tail = 0;
   int vid_sem_head = 0;
 
+  void reset_vid_buf(){
+	  vid_buf_bufs_size = vid_buf_BUFS_SIZE;
+	  num_vid_buf_bufs = NUM_vid_buf_BUFS;
+	  vid_buf_buf_tail = 0;
+	  vid_buf_buf_head = 0;
+	  memset(vid_buf_lens,0,sizeof(vid_buf_lens));
+	  memset(vid_buf_bufs,0,sizeof(vid_buf_bufs[0][0])*NUM_vid_buf_BUFS*vid_buf_BUFS_SIZE);
+	  vid_buf_errs=0;
+	  vid_max_bufs = 0;
+	  vid_sem_tail = 0;
+      vid_sem_head = 0;
+	  
+  }
+  
   char * vid_write_tail_buf_get (int len) {                          // Get tail buffer to write to
 
     if (len > vid_buf_BUFS_SIZE) {
@@ -1385,6 +1352,142 @@
   }
 
 
+  
+  //MEDIA INFO DECODE
+  
+  
+  
+  #define med_buf_BUFS_SIZE    65536 * 16      // Up to 256 Kbytes
+  int med_buf_bufs_size = med_buf_BUFS_SIZE;
+
+  #define   NUM_med_buf_BUFS   16            // Maximum of NUM_med_buf_BUFS - 1 in progress; 1 is never used
+  int num_med_buf_bufs = NUM_med_buf_BUFS;
+
+  char med_buf_bufs [NUM_med_buf_BUFS] [med_buf_BUFS_SIZE];
+
+  int med_buf_lens [NUM_med_buf_BUFS] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+  int med_buf_buf_tail = 0;    // Tail is next index for writer to write to.   If head = tail, there is no info.
+  int med_buf_buf_head = 0;    // Head is next index for reader to read from.
+
+  int med_buf_errs = 0;
+  int med_max_bufs = 0;
+  int med_sem_tail = 0;
+  int med_sem_head = 0;
+
+
+  
+  char * med_write_tail_buf_get (int len) {                          // Get tail buffer to write to
+
+    if (len > med_buf_BUFS_SIZE) {
+      loge ("!!!!!!!!!! med_write_tail_buf_get too big len: %d", len);   // E/med_write_tail_buf_get(10699): !!!!!!!!!! med_write_tail_buf_get too big len: 66338
+      return (NULL);
+    }
+
+    int bufs = med_buf_buf_tail - med_buf_buf_head;
+    if (bufs < 0)                                                       // If underflowed...
+      bufs += num_med_buf_bufs;                                         // Wrap
+    //logd ("med_write_tail_buf_get start bufs: %d  head: %d  tail: %d", bufs, med_buf_buf_head, med_buf_buf_tail);
+
+    if (bufs > med_max_bufs)                                            // If new maximum buffers in progress...
+      med_max_bufs = bufs;                                              // Save new max
+    if (bufs >= num_med_buf_bufs - 1) {                                 // If room for another (max = NUM_med_buf_BUFS - 1)
+      loge ("med_write_tail_buf_get out of med_buf_bufs");
+      med_buf_errs ++;
+      //med_buf_buf_tail = med_buf_buf_head = 0;                        // Drop all buffers
+      return (NULL);
+    }
+
+    int max_retries = 4;
+    int retries = 0;
+    for (retries = 0; retries < max_retries; retries ++) {
+      med_sem_tail ++;
+      if (med_sem_tail == 1)
+        break;
+      med_sem_tail --;
+      loge ("med_sem_tail wait");
+      ms_sleep (10);
+    }
+    if (retries >= max_retries) {
+      loge ("med_sem_tail could not be acquired");
+      return (NULL);
+    }
+
+    if (med_buf_buf_tail < 0 || med_buf_buf_tail > num_med_buf_bufs - 1)   // Protect
+      med_buf_buf_tail &= num_med_buf_bufs - 1;
+
+    med_buf_buf_tail ++;
+
+    if (med_buf_buf_tail < 0 || med_buf_buf_tail > num_med_buf_bufs - 1)
+      med_buf_buf_tail &= num_med_buf_bufs - 1;
+
+    char * ret = med_buf_bufs [med_buf_buf_tail];
+    med_buf_lens [med_buf_buf_tail] = len;
+
+    //logd ("med_write_tail_buf_get done  ret: %p  bufs: %d  tail len: %d  head: %d  tail: %d", ret, bufs, len, med_buf_buf_head, med_buf_buf_tail);
+
+    med_sem_tail --;
+
+    return (ret);
+  }
+
+  char * med_read_head_buf_get (int * len) {                              // Get head buffer to read from
+
+    if (len == NULL) {
+      loge ("!!!!!!!!!! med_read_head_buf_get");
+      return (NULL);
+    }
+    * len = 0;
+
+    int bufs = med_buf_buf_tail - med_buf_buf_head;
+    if (bufs < 0)                                                       // If underflowed...
+      bufs += num_med_buf_bufs;                                          // Wrap
+    //logd ("med_read_head_buf_get start bufs: %d  head: %d  tail: %d", bufs, med_buf_buf_head, med_buf_buf_tail);
+
+    if (bufs <= 0) {                                                    // If no buffers are ready...
+      if (ena_log_extra)
+        logd ("med_read_head_buf_get no med_buf_bufs");
+      //med_buf_errs ++;  // Not an error; just no data
+      //med_buf_buf_tail = med_buf_buf_head = 0;                          // Drop all buffers
+      return (NULL);
+    }
+
+    int max_retries = 4;
+    int retries = 0;
+    for (retries = 0; retries < max_retries; retries ++) {
+      med_sem_head ++;
+      if (med_sem_head == 1)
+        break;
+      med_sem_head --;
+      loge ("med_sem_head wait");
+      ms_sleep (10);
+    }
+    if (retries >= max_retries) {
+      loge ("med_sem_head could not be acquired");
+      return (NULL);
+    }
+
+    if (med_buf_buf_head < 0 || med_buf_buf_head > num_med_buf_bufs - 1)   // Protect
+      med_buf_buf_head &= num_med_buf_bufs - 1;
+
+    med_buf_buf_head ++;
+
+    if (med_buf_buf_head < 0 || med_buf_buf_head > num_med_buf_bufs - 1)
+      med_buf_buf_head &= num_med_buf_bufs - 1;
+
+    char * ret = med_buf_bufs [med_buf_buf_head];
+    * len = med_buf_lens [med_buf_buf_head];
+
+    //logd ("med_read_head_buf_get done  ret: %p  bufs: %d  head len: %d  head: %d  tail: %d", ret, bufs, * len, med_buf_buf_head, med_buf_buf_tail);
+
+    med_sem_head --;
+
+    return (ret);
+  }
+
+  
+  //END MEDIA DECODE
+  
 //#endif  //#ifndef UTILS_INCLUDED
 
 
